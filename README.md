@@ -15,11 +15,17 @@ But before anything
 
 In a terminal window enter:
 
-#### `sudo pip3 install pyatv`
+#### `pip3 install pyatv`
 
 Double click the release indigoplugin File and install.
 
 All going well - nothing will happen...
+
+If you get a ton of red/errors.  
+You will need to install Command line tools for Xcode.  T It is because of the dependencies of pyatv is miniaudio which requires Clang to be installed to compile.
+See FAQ at bottom. 
+Can try:  The below terminal command - if also fails see FAQ for manual method.
+`xcode-select —install`
 
 ### Steps:
 
