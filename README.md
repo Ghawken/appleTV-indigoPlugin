@@ -85,6 +85,20 @@ I have also implemented Launch App - which allows you to launch a specific appli
 Unfortunately it doesn't allow LiveTV within the app, or more detailed control - but this can be managed with a lauchApp command, and then, left, down, down, select remote commands for example
 
 
+### FAQ / Troubleshooting
+
+#### pip3 install pyatv
+
+Fails - with some red lines and an error about a dependency miniaudio.
+It appears to want to install some x-code commandline tools  - to help build this dependency.
+Install the xcode components - appears to be clang and hopefully will able to be installed.
+
+#### Can't remote control certain device.
+
+Currently I expose all airplay devices - Sonos included.  I do not believe these can be controlled or report status - but have not specifically tested them.
+The AppleTV devices are those we are aiming to support here.
+
+
 
 
 
