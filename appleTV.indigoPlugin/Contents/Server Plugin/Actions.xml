@@ -38,7 +38,6 @@
 					<Option value="turn_off"				>Turn device off</Option>
 					<Option value="turn_on"				    >Turn device on</Option><Option value="channel_up"				>Channel Up</Option>
 					<Option value="channel_down"			>Channel Down</Option>
-					<Option value="power_state;power_state"	>Return device power state</Option>
 				 </List>
 			</Field>
         </ConfigUI>

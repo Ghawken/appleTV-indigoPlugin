@@ -71,9 +71,14 @@ You will also see the device is an Indigo Relay - so there are Turn On/Turn Off/
 
 ### Remote Control / Actions
 
+![https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/RemoteCommands.png?raw=true](https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/RemoteCommands.png?raw=true)
 
 
 The plugin exposes all remote control options via commands.
+
+### Launch App
+
+![https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/lauchApp.png?raw=true](https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/lauchApp.png?raw=true)
 
 I have also implemented Launch App - which allows you to launch a specific application of the appleTV.  
 
