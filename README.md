@@ -90,7 +90,7 @@ Unfortunately it doesn't allow LiveTV within the app, or more detailed control -
 #### pip3 install pyatv
 
 Fails - with some red lines and an error about a dependency miniaudio.
-It appears to want to install some x-code commandline tools  - to help build this dependency.
+It appears to want to install some x-code "no developer toolds" -- commandline tools  - to help build this dependency.
 Install the xcode components - appears to be clang and hopefully will able to be installed.
 
 #### Can't remote control certain device.
