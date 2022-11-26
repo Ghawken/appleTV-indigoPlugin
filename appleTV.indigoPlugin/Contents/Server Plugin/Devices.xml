@@ -1,0 +1,231 @@
+<?xml version="1.0"?>
+<Devices>
+	<Device type="relay" id="appleTV" allowUserCreation="false">
+		<Name>AppleTV Device</Name>
+		<UiDisplayStateId>status</UiDisplayStateId>
+		<ConfigUI>
+			<Field id="isAppleTV"		type="checkbox"		defaultValue="true" hidden="yes"> </Field>
+				<Field id="SupportsOnState" type="checkbox" defaultValue="false" hidden ="true"></Field>
+				<Field id="SupportsSensorValue" type="checkbox" defaultValue="false" hidden ="true"></Field>
+				<Field id="SupportsStatusRequest" type="checkbox" defaultValue="false" hidden ="true"></Field>
+				<Field id="AllowOnStateChange" type="checkbox" defaultValue="false" hidden ="true"></Field>
+				<Field id="AllowSensorValueChange" type="checkbox" defaultValue="false" hidden="True"></Field>
+			<Field id="simpleSeparator3" type="separator"/>
+
+			<Field	  id="label3"			  type="label" >
+				<Label>Setup Device via Pairing</Label>
+			</Field>
+				<Field id="simpleSeparator3b3" type="separator"/>
+    <Field id="infoLabel0" type="label" fontSize='large' fontColor="blue">
+        <Field id="sep7c" type="separator"/>
+
+        <Label>To pair device press Start Pairing Button, and follow the instructions in the Log.  If incorrect Pin Submitted, likely will need to start process again.
+		</Label>
+    </Field>
+					<Field id="simpleSeparator3a3" type="separator"/>
+   		 <Field id="startPairing"
+				   type="button"
+				   tooltip="Click on this Access Account" >
+			<Title>Press</Title>
+        <Label>Starting Pairing: </Label>
+				<CallbackMethod>startPairing</CallbackMethod>
+		</Field>
+
+				<Field id="simpleSeparator133" type="separator"/>
+			<Field id="verficationcode"
+				   type="textfield"
+				   tooltip="Enter your AppleTV  PinCode"
+				   default=""   >
+				<Label>PinCode:</Label>
+			</Field>
+
+   		 <Field id="submitcode"
+				   type="button"
+				   tooltip="Click on this Access Account" >
+			<Title>Press</Title>
+        <Label>Submit PinCode</Label>
+				<CallbackMethod>submitCode</CallbackMethod>
+		</Field>
+				<Field id="simpleSeparator1233" type="separator"/>
+			<Field	  id="Name"		readonly="true"	fontColor="grey"  type="textfield" >
+				<Label>Name</Label>
+			</Field>
+
+			<Field	  id="IP"	fontColor="grey"	readonly="true"	  type="textfield" >
+				<Label>IP number</Label>
+			</Field>
+
+			<Field	  id="MAC"	readonly="true"	fontColor="grey"	  type="textfield" >
+				<Label>MAC number</Label>
+			</Field>
+			<Field	  id="Model"	readonly="true"		fontColor="grey"  type="textfield" >
+				<Label>Mode/SW</Label>
+			</Field>
+			<Field	  id="Identifier"	readonly="true"	fontColor="grey"	  type="textfield" >
+				<Label>Identifier</Label>
+			</Field>
+			<Field	  id="credentials"	readonly="true"	fontColor="grey"	  type="textfield" >
+				<Label>Pairing Credentials</Label>
+			</Field>
+		</ConfigUI>
+
+
+		<States>
+				<State id="status">
+					<ValueType>String</ValueType>
+					<TriggerLabel>status</TriggerLabel>
+					<ControlPageLabel>status</ControlPageLabel>
+				</State>
+				<State id="ip">
+					<ValueType>String</ValueType>
+					<TriggerLabel>ip</TriggerLabel>
+					<ControlPageLabel>ip</ControlPageLabel>
+				</State>
+							<State id="credentials">
+					<ValueType>String</ValueType>
+					<TriggerLabel>Pairing Credentials</TriggerLabel>
+					<ControlPageLabel>Pairing Crendentails</ControlPageLabel>
+				</State>
+				<State id="MAC">
+					<ValueType>String</ValueType>
+					<TriggerLabel>MAC</TriggerLabel>
+					<ControlPageLabel>MAC</ControlPageLabel>
+				</State>
+				<State id="identifier">
+					<ValueType>String</ValueType>
+					<TriggerLabel>identifier</TriggerLabel>
+					<ControlPageLabel>identifier</ControlPageLabel>
+				</State>
+				<State id="pin">
+					<ValueType>String</ValueType>
+					<TriggerLabel>pin</TriggerLabel>
+					<ControlPageLabel>pin</ControlPageLabel>
+				</State>
+				<State id="currentlyPlaying_PlayState">
+					<ValueType>String</ValueType>
+					<TriggerLabel>Playing State</TriggerLabel>
+					<ControlPageLabel>Playing State</ControlPageLabel>
+				</State>
+				<State id="name">
+					<ValueType>String</ValueType>
+					<TriggerLabel>name</TriggerLabel>
+					<ControlPageLabel>name</ControlPageLabel>
+				</State>
+
+				<State id="DMAPPort">
+					<ValueType>string</ValueType>
+					<TriggerLabel>DMAPPort</TriggerLabel>
+					<ControlPageLabel>DMAPPort</ControlPageLabel>
+				</State>
+
+				<State id="MRPPort">
+					<ValueType>string</ValueType>
+					<TriggerLabel>MRPPort</TriggerLabel>
+					<ControlPageLabel>MRPPort</ControlPageLabel>
+				</State>
+
+				<State id="AIRPLAYPort">
+					<ValueType>string</ValueType>
+					<TriggerLabel>AIRPLAYPort</TriggerLabel>
+					<ControlPageLabel>AIRPLAYPort</ControlPageLabel>
+				</State>
+
+
+				<State id="model">
+					<ValueType>string</ValueType>
+					<TriggerLabel>model</TriggerLabel>
+					<ControlPageLabel>model</ControlPageLabel>
+				</State>
+
+
+				<State id="deepSleep">
+					<ValueType>boolean</ValueType>
+					<TriggerLabel>deepSleep</TriggerLabel>
+					<ControlPageLabel>deepSleep</ControlPageLabel>
+				</State>
+
+				<State id="PowerState">
+					<ValueType>String</ValueType>
+					<TriggerLabel>PowerState</TriggerLabel>
+					<ControlPageLabel>PowerState</ControlPageLabel>
+				</State>
+
+
+				<State id="currentlyPlaying_MediaType">
+					<ValueType>String</ValueType>
+					<TriggerLabel>currentlyPlaying_MediaType</TriggerLabel>
+					<ControlPageLabel>currentlyPlaying_MediaType</ControlPageLabel>
+				</State>
+
+
+				<State id="currentlyPlaying_DeviceState">
+					<ValueType>String</ValueType>
+					<TriggerLabel>currentlyPlaying_DeviceState</TriggerLabel>
+					<ControlPageLabel>currentlyPlaying_DeviceState</ControlPageLabel>
+				</State>
+
+				<State id="currentlyPlaying_Title">
+					<ValueType>String</ValueType>
+					<TriggerLabel>currentlyPlaying_Title</TriggerLabel>
+					<ControlPageLabel>currentlyPlaying_Titlee</ControlPageLabel>
+				</State>
+
+				<State id="currentlyPlaying_Artist">
+					<ValueType>String</ValueType>
+					<TriggerLabel>currentlyPlaying_Artist</TriggerLabel>
+					<ControlPageLabel>currentlyPlaying_Artist</ControlPageLabel>
+				</State>
+
+				<State id="currentlyPlaying_Album">
+					<ValueType>String</ValueType>
+					<TriggerLabel>currentlyPlaying_Album</TriggerLabel>
+					<ControlPageLabel>currentlyPlaying_Album</ControlPageLabel>
+				</State>
+
+				<State id="currentlyPlaying_Genre">
+					<ValueType>String</ValueType>
+					<TriggerLabel>currentlyPlaying_Genre</TriggerLabel>
+					<ControlPageLabel>currentlyPlaying_Genre</ControlPageLabel>
+				</State>
+
+
+				<State id="currentlyPlaying_Position">
+					<ValueType>String</ValueType>
+					<TriggerLabel>currentlyPlaying_Position</TriggerLabel>
+					<ControlPageLabel>currentlyPlaying_Position</ControlPageLabel>
+				</State>
+
+				<State id="currentlyPlaying_TotalTime">
+					<ValueType>String</ValueType>
+					<TriggerLabel>currentlyPlaying_TotalTime</TriggerLabel>
+					<ControlPageLabel>currentlyPlaying_TotalTime</ControlPageLabel>
+				</State>
+
+				<State id="currentlyPlaying_Repeat">
+					<ValueType>String</ValueType>
+					<TriggerLabel>currentlyPlaying_Repeat</TriggerLabel>
+					<ControlPageLabel>currentlyPlaying_Repeat</ControlPageLabel>
+				</State>
+
+				<State id="currentlyPlaying_Shuffle">
+					<ValueType>String</ValueType>
+					<TriggerLabel>currentlyPlaying_Shuffle</TriggerLabel>
+					<ControlPageLabel>currentlyPlaying_Shufflet</ControlPageLabel>
+				</State>
+
+				<State id="currentlyPlaying_App">
+					<ValueType>String</ValueType>
+					<TriggerLabel>currentlyPlaying_App</TriggerLabel>
+					<ControlPageLabel>currentlyPlaying_App</ControlPageLabel>
+				</State>
+
+				<State id="currentlyPlaying_AppId">
+					<ValueType>String</ValueType>
+					<TriggerLabel>currentlyPlaying_AppId</TriggerLabel>
+					<ControlPageLabel>currentlyPlaying_AppId</ControlPageLabel>
+				</State>
+
+		</States>
+	</Device>
+
+</Devices>

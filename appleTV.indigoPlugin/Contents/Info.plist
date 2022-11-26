@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PluginVersion</key>
+	<string>0.0.10</string>
+	<key>ServerApiVersion</key>
+	<string>3.1</string>
+	<key>IwsApiVersion</key>
+	<string>1.0.0</string>
+	<key>CFBundleDisplayName</key>
+	<string>appleTV Plugin</string>
+	<key>CFBundleName</key>
+	<string>appleTV Plugin</string>
+        <key>CFBundleIdentifier</key>
+	<string>com.GlennNZ.indigoplugin.appleTV</string>
+	<key>CFBundleVersion</key>
+	<string>1.0.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>https://forums.indigodomo.com/viewforum.php?f=366</string>
+		</dict>
+	</array>
+</dict>
+</plist>
