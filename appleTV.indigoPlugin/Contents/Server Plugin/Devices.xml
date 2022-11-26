@@ -27,7 +27,7 @@
 				   type="button"
 				   tooltip="Click on this Access Account" >
 			<Title>Press</Title>
-        <Label>Starting Pairing: </Label>
+        <Label>Start Pairing: </Label>
 				<CallbackMethod>startPairing</CallbackMethod>
 		</Field>
 
