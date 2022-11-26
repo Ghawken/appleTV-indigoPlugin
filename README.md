@@ -73,4 +73,13 @@ You will also see the device is an Indigo Relay - so there are Turn On/Turn Off/
 
 
 
+The plugin exposes all remote control options via commands.
+
+I have also implemented Launch App - which allows you to launch a specific application of the appleTV.  
+
+Unfortunately it doesn't allow LiveTV within the app, or more detailed control - but this can be managed with a lauchApp command, and then, left, down, down, select remote commands for example
+
+
+
+
 
