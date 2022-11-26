@@ -617,6 +617,7 @@ class Plugin(indigo.PluginBase):
         self._appleTVpairing.pin(vercode)
 
         self._event_loop.create_task(self.two_pairing(identifier, vercode))
+        #valuesDict['credentials'] = credentials
 
         return valuesDict
 
@@ -640,6 +641,10 @@ class Plugin(indigo.PluginBase):
     def validateDeviceConfigUi(self, values_dict, type_id, dev_id):
         try:
             self.logger.debug(f"ValidateDevice Config UI called {values_dict} and ID {dev_id}")
+            self.sleep(0.2)
+            if self._paired_credentials != None:
+                values_dict["credentials"]= str(self._paired_credentials)
+
             return (True, values_dict)
         except:
             self.logger.exception("Error validate Config")
