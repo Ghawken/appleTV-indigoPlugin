@@ -357,7 +357,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             self.plugin.logger.debug(f"Connecting to {config.address}")
             return await pyatv.connect(config, loop)
         except:
-            self.logger.exception("Connect ATV Exception")
+            self.plugin.logger.exception("Connect ATV Exception")
 
     async def loop_atv(self, loop, atv_config, deviceid):
         try:
@@ -547,7 +547,10 @@ class Plugin(indigo.PluginBase):
 
             if credentials != "":
                 self.logger.info(f"{device.name} Pairing Credentials exist, attempting to connect.")
-                self.appleTVManagers.append( appleTVListener(self, self._event_loop, device.states, device.id ))
+                new_data = {}
+                new_data["credentials"] = credentials
+                new_data["identifier"] = identifier
+                self.appleTVManagers.append( appleTVListener(self, self._event_loop, new_data, device.id ))
 
         else:
             device.updateStateOnServer(key="status", value="Starting Up")
@@ -614,7 +617,6 @@ class Plugin(indigo.PluginBase):
         self._appleTVpairing.pin(vercode)
 
         self._event_loop.create_task(self.two_pairing(identifier, vercode))
-        #valuesDict['credentials'] = credentials
 
         return valuesDict
 
@@ -636,23 +638,12 @@ class Plugin(indigo.PluginBase):
             self.logger.debug("Exception in DeviceStopCom \n", exc_info=True)
 
     def validateDeviceConfigUi(self, values_dict, type_id, dev_id):
-        self.logger.debug(f"ValidateDevice Config UI called {values_dict}")
-        verificationcode = ""
-        if "verificationcode" in values_dict:
-            verificationcode = values_dict["verificationcode"]
-        if self._paired_credentials !=None:
-            values_dict["credentials"]= str(self._paired_credentials)
-            device = indigo.devices[dev_id]
-            stateList = [
-                {'key': 'credentials', 'value': str(self._paired_credentials)},
-                {'key': 'status', 'value': "Paired", "uiValue":"Paired"},
-                {'key': 'pin', 'value': str(verificationcode)},
-            ]
-            device.updateStatesOnServer(stateList)
-            self.sleep(0.2)
-
-        return (True, values_dict)
-
+        try:
+            self.logger.debug(f"ValidateDevice Config UI called {values_dict} and ID {dev_id}")
+            return (True, values_dict)
+        except:
+            self.logger.exception("Error validate Config")
+            return (True, values_dict)
     def runConcurrentThread(self):
         # Periodically check to see that the subscription hasn't expired and that the reflector is still working.
         try:

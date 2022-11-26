@@ -81,11 +81,6 @@
 					<TriggerLabel>ip</TriggerLabel>
 					<ControlPageLabel>ip</ControlPageLabel>
 				</State>
-							<State id="credentials">
-					<ValueType>String</ValueType>
-					<TriggerLabel>Pairing Credentials</TriggerLabel>
-					<ControlPageLabel>Pairing Crendentails</ControlPageLabel>
-				</State>
 				<State id="MAC">
 					<ValueType>String</ValueType>
 					<TriggerLabel>MAC</TriggerLabel>
@@ -95,11 +90,6 @@
 					<ValueType>String</ValueType>
 					<TriggerLabel>identifier</TriggerLabel>
 					<ControlPageLabel>identifier</ControlPageLabel>
-				</State>
-				<State id="pin">
-					<ValueType>String</ValueType>
-					<TriggerLabel>pin</TriggerLabel>
-					<ControlPageLabel>pin</ControlPageLabel>
 				</State>
 				<State id="currentlyPlaying_PlayState">
 					<ValueType>String</ValueType>
