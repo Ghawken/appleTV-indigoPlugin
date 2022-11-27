@@ -4,7 +4,7 @@
         <Name>Send command to Apple TV</Name>
         <CallbackMethod>sendRemoteCommand</CallbackMethod>
         <ConfigUI>
-			<Field id="appleTV" type="menu" defaultValue="0" tooltip="select appleTV ">
+			<Field id="appleTV" type="menu" defaultValue="0" tooltip="select appleTV " dynamicReload="True">
 				 <List class="indigo.devices" filter="self.appleTV"/>
 				<Label>Select Apple Tv:</Label>
                 <CallbackMethod>menu_callback</CallbackMethod>
@@ -12,7 +12,7 @@
 
             <Field id="command" type="menu">
                 <Label>Command:</Label>
-                <List class="self" method="commandListGenerator"/>
+                <List class="self" method="commandListGenerator" dynamicReload="True"/>
                 <CallbackMethod>menu_callback</CallbackMethod>
             </Field>
 			<Field id="args" type="textfield">

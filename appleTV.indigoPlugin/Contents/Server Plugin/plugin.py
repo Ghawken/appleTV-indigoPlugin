@@ -565,6 +565,8 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                         self.atv.power.listener.start()
                         self.plugin.logger.debug("Push updater started")
                         self.plugin.logger.info(f"{device.name} successfully connected and real-time Push updating enabled.")
+                        if self.isAppleTV:
+                            await self._update_app_list()
         except self.plugin.stopThread:
             pass
         except:
@@ -1007,6 +1009,14 @@ class Plugin(indigo.PluginBase):
     def commandListGenerator(self, filter="", values_dict=None, typeId="", targetId=0):
         try:
             state_list = []
+            cmd_list = {}
+            pwr_list = {}
+            meta_list = {}
+            play_list = {}
+            stream_list = {}
+            audio_list = {}
+            app_list = {}
+
             self.logger.debug(f"commandListGenerator called {values_dict}")
             if "appleTV" in values_dict:
                 try:
@@ -1015,15 +1025,43 @@ class Plugin(indigo.PluginBase):
                     for appletvManager in self.appleTVManagers:
                         if int(appletvManager.device_ID) == int(deviceid):
                             self.logger.debug(f"Found correct AppleTV listener/manager. {appletvManager} and id {appletvManager.device_ID}")
+                            try:
+                                cmd_list = retrieve_commands( pyatv.interface.RemoteControl)
+                            except:
+                                self.logger.exception("cmd_list exception")
+                                pass
+                            try:
+                                pwr_list = retrieve_commands(pyatv.interface.Power)
+                            except:
+                                self.logger.exception("cmd_list exception")
+                                pass
+                            try:
+                                meta_list = retrieve_commands( pyatv.interface.Metadata)
+                            except:
+                                self.logger.exception("cmd_list exception")
+                                pass
+                            try:
+                                play_list = retrieve_commands(pyatv.interface.Playing)
+                            except:
+                                self.logger.exception("cmd_list exception")
+                                pass
+                            try:
+                                stream_list = retrieve_commands(pyatv.interface.Stream)
+                            except:
+                                self.logger.exception("cmd_list exception")
+                                pass
 
-                            cmd_list = retrieve_commands( pyatv.interface.RemoteControl)
-                            pwr_list = retrieve_commands(pyatv.interface.Power)
-                            meta_list = retrieve_commands( pyatv.interface.Metadata)
-                            play_list = retrieve_commands(pyatv.interface.Playing)
-                            stream_list = retrieve_commands(pyatv.interface.Stream)
                             #info_list = retrieve_commands(pyatv.interface.DeviceInfo)
-                            audio_list = retrieve_commands(pyatv.interface.Audio)
-                            app_list = retrieve_commands(pyatv.interface.Apps)
+                            try:
+                                audio_list = retrieve_commands(pyatv.interface.Audio)
+                            except:
+                                self.logger.exception("cmd_list exception")
+                                pass
+                            try:
+                                app_list = retrieve_commands(pyatv.interface.Apps)
+                            except:
+                                self.logger.exception("cmd_list exception")
+                                pass
                             self.logger.debug(f"cmd_list {cmd_list}")
                             state_list.append((-1, "%%disabled:Remote Commands:%%"))
                             for key,value in cmd_list.items():
