@@ -103,6 +103,8 @@ I have also implemented Launch App - which allows you to launch a specific appli
 Unfortunately it doesn't allow LiveTV within the app, or more detailed control - but this can be managed with a lauchApp command, and then, left, down, down, select remote commands for example
 
 
+
+
 ### FAQ / Troubleshooting
 
 #### pip3 install pyatv
@@ -123,6 +125,18 @@ The above worked for my production machine - which hit this issue.  (avoided Xco
 Currently I expose all airplay devices - Sonos included.  I do not believe these can be controlled or report status - but have not specifically tested them.
 The AppleTV devices are those we are aiming to support here.
 
+
+# Changelog
+
+Additional Remote control states - allow arguments to be sent.
+Enabling set volume, double tap, hold, play_URL etc.
+MenuItem: Add Logging info to show all Commands possible (not available!)
+MenuItem: Add Logging info to show Features available for each Device
+Remove unrecognised devices from being created.  (Tested Sonos devices can't work use Airplay2, and unknown encryption)
+Should allow AppleTVs (all) and HomePods (untested)
+Restart Device after pairing (avoiding need to restart plugin if connection issues)
+Fine tuning some aspects.
+More repeated reporting of PowerState
 
 
 

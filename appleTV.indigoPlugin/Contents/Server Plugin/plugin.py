@@ -153,11 +153,12 @@ class UniqueQueue(Queue):
 ####################################################################################
 class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListener, pyatv.interface.PowerListener):
 
-    def __init__(self, plugin, loop, atv_config,deviceid):
+    def __init__(self, plugin, loop, atv_config,deviceid, config_appleTV):
         self.plugin = plugin
         self.plugin.logger.debug("Within init of AppleTVListener/all")
         self.deviceid = deviceid
         self.atv = None
+        self.isAppleTV = config_appleTV
         self.loop = loop
         self.atv_config = atv_config
         self._app_list = None
@@ -313,7 +314,8 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                     playstatus,
                     self.atv,
                     time_start,
-                    self.deviceid
+                    self.deviceid,
+                    self.isAppleTV
                 )
             )
         except:
@@ -438,9 +440,10 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             return value
 
         except NotImplementedError:
-            self.plugin.logger.exception(f"Command {command} is not supported by device")
+            self.plugin.logger.info(f"Command {command} is not supported by device")
         except pyatv.exceptions.AuthenticationError as ex:
-            self.plugin.logger.exception(f"Authentication error: {ex}")
+            self.plugin.logger.info(f"Authentication error: {ex}")
+            self.plugin.logger.debug(f"Authentication error: {ex}", exc_info=True)
         except:
             self.plugin.logger.debug("General Exception Caught:",exc_info=True)
             self.plugin.logger.info("Could not run this command at this time.")
@@ -506,10 +509,13 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                 self.plugin.logger.info("No devices found, will retry")
                 return
             config = atvs[0]
-            self.plugin.logger.debug(f"AppleTV:\n {config}")
-            config.set_credentials(pyatv.Protocol.AirPlay, airplay_credentials)
-            config.set_credentials(pyatv.Protocol.Companion, airplay_credentials)
-            config.set_credentials(pyatv.Protocol.RAOP, airplay_credentials)
+            self.plugin.logger.debug(f"AppleTV:\n {config}") #{config.services[0].pairing}")
+            if self.isAppleTV:
+                config.set_credentials(pyatv.Protocol.AirPlay, airplay_credentials)
+                config.set_credentials(pyatv.Protocol.Companion, airplay_credentials)
+                config.set_credentials(pyatv.Protocol.RAOP, airplay_credentials)
+            else:
+                self.plugin.logger.debug(f"Not setting credentials as airplay only device..")
             self.plugin.logger.debug(f"Connecting to {config.address}")
             return await pyatv.connect(config, loop)
         except:
@@ -534,12 +540,16 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                 # Update app list
                 self.plugin.logger.debug("Updating app list")
                 self.plugin.logger.info(f"{device.name} successfully connected and real-time Push updating enabled.")
-                await self._update_app_list()
+                if self.isAppleTV:
+                    await self._update_app_list()
 
             while True:
                 await asyncio.sleep(20)
                 try:
-                    self.atv.metadata.app
+                    pass
+                    #self.atv.metadata.app
+                except self.plugin.stopThread:
+                    break
                 except:
                     self.plugin.logger.debug("Exception:", exc_info=True)
                     self.plugin.logger.debug("Reconnecting to Apple TV")
@@ -705,9 +715,13 @@ class Plugin(indigo.PluginBase):
             if credentials != "":
                 self.logger.info(f"{device.name} Pairing Credentials exist, attempting to connect.")
                 new_data = {}
+                if credentials == "":  ## future use.
+                    thisisappleTV = False
+                else:
+                    thisisappleTV = True
                 new_data["credentials"] = credentials
                 new_data["identifier"] = identifier
-                self.appleTVManagers.append( appleTVListener(self, self._event_loop, new_data, device.id ))
+                self.appleTVManagers.append( appleTVListener(self, self._event_loop, new_data, device.id, thisisappleTV ))
 
         else:
             device.updateStateOnServer(key="status", value="Starting Up")
@@ -720,12 +734,9 @@ class Plugin(indigo.PluginBase):
         self._appleTVpairing  = None
         device = indigo.devices[dev_id]
         identifier = device.states['identifier']
-
         # get all atvs
         self._event_loop.create_task(self.return_MatchedappleTVs(identifier))
         self.logger.info("Scanning for all AppleTVs")
-
-
 
     async def two_pairing(self, identifier, pincode):
         try:
@@ -760,6 +771,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.info("This appleTV needs a Pincode.  Please enter and press Submit.")
         except:
             self.logger.exception("OnePairing")
+
 
     def submitCode(self, valuesDict, type_id="", dev_id=None):
         self.logger.debug(u'submit PINCode Button pressed Called.')
@@ -876,6 +888,12 @@ class Plugin(indigo.PluginBase):
             self.logger.exception("Exception in get menu_log_atvs")
 
 #######################################################################
+    def didDeviceCommPropertyChange(self, origDev, newDev):
+        # example of customizing the call:
+        if origDev.pluginProps.get('credentials', '') != newDev.pluginProps.get('credentials', ''):
+            return True
+        return super(Plugin, self).didDeviceCommPropertyChange(origDev, newDev)
+
 
     def validateDeviceConfigUi(self, values_dict, type_id, dev_id):
         try:
@@ -883,7 +901,7 @@ class Plugin(indigo.PluginBase):
             self.sleep(0.2)
             if self._paired_credentials != None:
                 values_dict["credentials"]= str(self._paired_credentials)
-
+                values_dict["isPaired"] = True
             return (True, values_dict)
         except:
             self.logger.exception("Error validate Config")
@@ -924,7 +942,7 @@ class Plugin(indigo.PluginBase):
 
 
     def shutdown(self):
-        self.logger.info("Shutting down Plugin}")
+        self.logger.info("Shutting down Plugin")
 
 
     def validatePrefsConfigUi(self, valuesDict):
@@ -1065,7 +1083,7 @@ class Plugin(indigo.PluginBase):
 
     async def _async_start(self):
         self.logger.debug("_async_start")
-        self.logger.info("Discovering Devices and setting up connection")
+        self.logger.info("Starting event loop and setting up any paired connections")
         # add things you need to do at the start of the plugin here
 
     def sendLaunchApp(self, valuesDict, typeId):
@@ -1103,9 +1121,9 @@ class Plugin(indigo.PluginBase):
             command = f"{command}={args}"
 
         self.logger.info(f"Sending Command {command} to appleTV Device ID {appleTVid}")
-
+        foundDevice = False
         for appletvManager in self.appleTVManagers:
-            foundDevice = False
+
             if int(appletvManager.device_ID) == int(appleTVid):
                 foundDevice = True
                 self.logger.debug(f"Found correct AppleTV listener/manager. {appletvManager} and id {appletvManager.device_ID}")
@@ -1114,25 +1132,30 @@ class Plugin(indigo.PluginBase):
         if foundDevice == False:
             self.logger.info("No command run.  The appleTV appears to have not been found.")
 
-    async def process_playstatus(self, playstatus,  atv, time_start,deviceid):
+    async def process_playstatus(self, playstatus,  atv, time_start,deviceid, isAppleTV):
         try:
-
             #self.logger.debug(f"Process PlayStatus Called {playstatus}, {atv}, {atv.metadata} {time_start} and IndigoDeviceID {deviceid} ")
             self.logger.debug(f"PlayState DEVICE_state {playstatus.device_state}")
             #self.logger.debug(f"PlayState TITLE {playstatus.title}, & Position {playstatus.position} & Artist {playstatus.artist}  & media_type {playstatus.media_type} ")
             #self.logger.debug(f"PlayState TOTAL TIME {playstatus.total_time} & Series Name {playstatus.series_name} && Season_Numer {playstatus.season_number}")
             #self.logger.debug(f"PlayState EpisodeNo {playstatus.episode_number} & Content Identifier {playstatus.content_identifier} ")
-
+            device = indigo.devices[deviceid]
             atv_appId = ""
-            atv_app = atv.metadata.app
+            atv_app = None
+            if isAppleTV:
+                atv_app = atv.metadata.app
             if atv_app !=None:
                 atv_appId = atv.metadata.app.identifier
             self.logger.debug(f"App Playing {atv_appId} and App Name {atv_app}")
             playingState = "Standby"
             if atv is None:
                 playingState = "Off"
-            elif atv.power.power_state == pyatv.const.PowerState.Off:
-                playingState = "Standby"
+            if isAppleTV:
+                if atv.power.power_state == pyatv.const.PowerState.Off:
+                    playingState = "Standby"
+                    powerstate = False
+                elif atv.power.power_state == pyatv.const.PowerState.On:
+                    powerstate = True
             state = playstatus.device_state
             if state in (pyatv.const.DeviceState.Idle, pyatv.const.DeviceState.Loading):
                 playingState = "Idle"
@@ -1140,7 +1163,6 @@ class Plugin(indigo.PluginBase):
                 playingState = "Playing"
             if state in (pyatv.const.DeviceState.Paused, pyatv.const.DeviceState.Seeking, pyatv.const.DeviceState.Stopped):
                 playingState = "Paused"
-
             stateList = [
                 {'key': 'currentlyPlaying_AppId', 'value': f"{atv_appId}"},
                 {'key': 'currentlyPlaying_App', 'value': f"{atv_app}"},
@@ -1155,9 +1177,13 @@ class Plugin(indigo.PluginBase):
                 {'key': 'currentlyPlaying_Title', 'value': f"{playstatus.title}"},
                 {'key': 'currentlyPlaying_TotalTime', 'value': f"{playstatus.total_time}"},
                 {'key': 'currentlyPlaying_PlayState', 'value': f"{playingState}"},
+                {'key': 'onOffState', 'value': powerstate},
             ]
-            device = indigo.devices[deviceid]
             device.updateStatesOnServer(stateList)
+            if powerstate:
+                device.updateStateImageOnServer(indigo.kStateImageSel.PowerOn)
+            else:
+                device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
         except:
             self.logger.exception("process_playlist error")
 
@@ -1193,11 +1219,26 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(f"State List {state_list}")
         return state_list
 
-    async def return_MatchedappleTVs(self, identifier):
+    async def matchatv_nopairing(self, identifier):
         self.logger.debug("Returning all ATVS")
         atvs = await pyatv.scan(self._event_loop)
         if not atvs:
             self.logger.info("No devices found")
+            return None
+        else:
+            self.logger.debug(f"atvs {atvs}")
+            for atv in atvs:
+                self.logger.debug(f"Device Identifer: {identifier}  && appleTV {atv.identifier}")
+                if identifier == str(atv.identifier):
+                    self.logger.debug(f"Found Matching Device {atv.identifier}, no Pairing.")
+                    self._event_loop.create_task(self.no_pairing_needed(atv))
+                    return
+
+    async def return_MatchedappleTVs(self, identifier):
+        self.logger.debug("Returning all ATVS")
+        atvs = await pyatv.scan(self._event_loop, timeout=10)
+        if not atvs:
+            self.logger.info("This deivce was not found.  Try power cycling and try again.")
             return None
         else:
             self.logger.debug(f"atvs {atvs}")
@@ -1294,7 +1335,7 @@ class Plugin(indigo.PluginBase):
 
         ip = str(atv.address)
         name = atv.name
-        operating_system = atv.device_info.operating_system.TvOS
+        operating_system = atv.device_info.operating_system
         mac = atv.device_info.mac
         model = atv.device_info.model
         identifier = atv.identifier
@@ -1307,7 +1348,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.debug(f"Found exisiting device same Identifier. Skipping: {dev.name}")
                 return
 
-        if operating_system == atv.device_info.operating_system.TvOS:
+        if model !=  pyatv.const.DeviceModel.Unknown:
             devProps = {}
             devProps[u"isAppleTV"] = True
             devProps[u"SupportsOnState"] = False

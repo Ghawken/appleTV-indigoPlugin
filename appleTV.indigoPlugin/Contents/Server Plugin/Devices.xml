@@ -24,7 +24,7 @@
         <Label>To pair device press Start Pairing Button, and follow the instructions in the Log.  If incorrect Pin Submitted, likely will need to start process again.
 		</Label>
     </Field>
-					<Field id="simpleSeparator3a3" type="separator"/>
+					<Field id="simpleSeparator321a3" type="separator"/>
    		 <Field id="startPairing"
 				   type="button"
 				   tooltip="Click on this Access Account" >

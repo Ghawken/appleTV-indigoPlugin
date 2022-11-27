@@ -91,7 +91,7 @@ If need arises, can re-press whenever new appleTV's added, and if any unneeded d
             <Option value="50">Critical Errors Only</Option>
         </List>
     </Field>
-        <Field id="showDebugFileLevel" type="menu" defaultValue="20" tooltip="Controls the amount of debug information written to the log.">
+        <Field id="showDebugFileLevel" type="menu" defaultValue="5" tooltip="Controls the amount of debug information written to the log.">
         <Label>File Debug level:</Label>
         <Description>Level of Debug information saved to File</Description>
         <List>
