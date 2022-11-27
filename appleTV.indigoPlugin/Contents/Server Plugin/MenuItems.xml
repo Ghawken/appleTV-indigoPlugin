@@ -1,5 +1,26 @@
 <?xml version="1.0"?>
 <MenuItems>
-
+ <MenuItem id="displayDetails">
+        <Name>Log appleTV info</Name>
+        <ConfigUI>
+			<Field id="appleTV" type="menu" defaultValue="0" tooltip="select appleTV ">
+				 <List class="indigo.devices" filter="self.appleTV"/>
+				<Label>Select Apple Tv:</Label>
+			</Field>
+                <Field id="option" type="menu" defaultValue="0">
+				<Label>Select Option:</Label>
+				 <List>
+					<Option value="scandevice"						>Scan and Display Info on Device</Option>
+                     <Option value="showcommands"					>List supported Commands</Option>
+                       <Option value="showFeatures"					>List supported Features</Option>
+				 </List>
+			</Field>
+            <Field id="internallist" type="button">
+                <Label>Do:</Label>
+                <Title>Run Selected Method</Title>
+                <CallbackMethod>menu_actionRun</CallbackMethod>
+            </Field>
+        </ConfigUI>
+    </MenuItem>
 
 </MenuItems>

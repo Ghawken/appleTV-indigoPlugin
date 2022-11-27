@@ -7,9 +7,9 @@ Author: GlennNZ
 """
 
 import threading
-from enum import Enum
-import traceback
 
+import traceback
+import inspect
 import asyncio
 
 from queue import Queue
@@ -26,10 +26,20 @@ except:
     pass
 
 import time as t
+import binascii
 
 try:
     import pyatv
     import pyatv.const
+    from pyatv.const import (
+        FeatureName,
+        FeatureState,
+        InputAction,
+        Protocol,
+        RepeatState,
+        ShuffleState,
+    )
+    from pyatv.interface import retrieve_commands
 except:
     # error in init when can message
     pass
@@ -177,6 +187,28 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         else:
             return ""
 
+    @property
+    def list_features(self):
+        """Print a list of all features and options."""
+        try:
+            all_features = self.atv.features.all_features(include_unsupported=False)
+            str_return = "\nFeature list:\n---------------- \n"
+
+            for name, feature in all_features.items():
+                str_return +=  f"{name.name}: {feature.state.name}\n"
+                options = [f"{k}={v}" for k, v in feature.options.items()]
+                if options:
+                    str_return += f", Options={', '.join(options)}\n"
+
+            str_return += "\nLegend:\n"
+            str_return += "-------\n"
+            str_return +="Available: Supported by device and usable now\n"
+            str_return +="Unavailable: Supported by device but not usable now\n"
+            str_return +="Unknown: Supported by the device but availability not known\n"
+            str_return +="Unsupported: Not supported by this device (or by pyatv)\n"
+            return str_return
+        except:
+            self.plugin.logger.exception("list_features error:")
 
     async def async_lauch_app(self, app_id: str) -> None:
         """Select input source."""
@@ -294,21 +326,145 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         except:
             self.plugin.logger.exception("Error in Start App")
 
-    def send_command(self, command, **kwargs):
-        try:
-            self.plugin.logger.debug(f"Within send_command and command - {command}")
+#### redo Remote control handling - programmatically generate menu items
 
-            if command == "turn_on":
-                self.plugin.logger.debug(f"Command turn_on received: Powerstate:{self.atv.power.power_state}")
-                self.loop.create_task(self.atv.power.turn_on())
-            elif command == "turn_off":
-                self.loop.create_task(self.atv.power.turn_off())
+    def _typeparse(self, value):
+        try:
+            return int(value)
+        except ValueError:
+            return value
+
+    def _parse_args(self, cmd, args):
+        args = [self._typeparse(x) for x in args]
+        if cmd == "set_shuffle":
+            return [ShuffleState(args[0])]
+        if cmd == "set_repeat":
+            return [RepeatState(args[0])]
+        if cmd in ["up", "down", "left", "right", "select", "menu", "home"]:
+            return [InputAction(args[0])]
+        if cmd == "set_volume":
+            return [float(args[0])]
+        return args
+
+    def _extract_command_with_args(self, cmd):
+        """Parse input command with arguments.
+        Parses the input command in such a way that the user may
+        provide additional argument to the command. The format used is this:
+          command=arg1,arg2,arg3,...
+        all the additional arguments are passed as arguments to the target
+        method.
+        """
+        equal_sign = cmd.find("=")
+        if equal_sign == -1:
+            return cmd, []
+
+        command = cmd[0:equal_sign]
+        args = cmd[equal_sign + 1:].split(",")
+        return command, self._parse_args(command, args)
+
+    async def _handle_device_command(self, args, cmd ):
+        try:
+           # device = retrieve_commands(pyatv.DeviceCommands)
+            self.plugin.logger.debug(f"_handle_device_command called - Args: {args}  Cmd:{cmd}")
+            ctrl = retrieve_commands(pyatv.interface.RemoteControl)
+            metadata = retrieve_commands(pyatv.interface.Metadata)
+            power = retrieve_commands(pyatv.interface.Power)
+            playing = retrieve_commands(pyatv.interface.Playing)
+            stream = retrieve_commands(pyatv.interface.Stream)
+            device_info = retrieve_commands(pyatv.interface.DeviceInfo)
+            apps = retrieve_commands(pyatv.interface.Apps)
+            audio = retrieve_commands(pyatv.interface.Audio)
+            # Parse input command and argument from user
+            cmd, cmd_args = self._extract_command_with_args(cmd)
+           # cmd, cmd_args = cmd, self._parse_args(cmd, args)
+
+            self.plugin.logger.debug(f"cmd and cmd_args extracted and Cmd {cmd} and cmd_args {cmd_args}")
+            # if cmd in device:
+            #     return await _exec_command(
+            #         DeviceCommands(atv, loop, args), cmd, False, *cmd_args
+            #     )
+            # NB: Needs to be above RemoteControl for now as volume_up/down exists in both
+            # but implementations in Audio shall be called
+            if cmd in audio:
+                return await self._exec_command(self.atv.audio, cmd, True, *cmd_args)
+
+            if cmd in ctrl:
+                return await self._exec_command(self.atv.remote_control, cmd, True, *cmd_args)
+
+            if cmd in metadata:
+                return await self._exec_command(self.atv.metadata, cmd, True, *cmd_args)
+
+            if cmd in power:
+                return await self._exec_command(self.atv.power, cmd, True, *cmd_args)
+
+            if cmd in playing:
+                playing_resp = await self.atv.metadata.playing()
+                return await self._exec_command(playing_resp, cmd, True, *cmd_args)
+
+            if cmd in stream:
+                return await self._exec_command(self.atv.stream, cmd, True, *cmd_args)
+
+            if cmd in device_info:
+                return await self._exec_command(self.atv.device_info, cmd, True, *cmd_args)
+
+            if cmd in apps:
+                return await self._exec_command(self.atv.apps, cmd, True, *cmd_args)
+
+            self.plugin.logger.error(f"Unknown command: {cmd}")
+            return 1
+        except:
+            self.plugin.logger.exception("")
+
+    async def _exec_command(self, obj, command, print_result, *args):
+        try:
+            # If the command to execute is a @property, the value returned by that
+            # property will be stored in tmp. Otherwise it's a coroutine and we
+            # have to yield for the result and wait until it is available.
+            tmp = getattr(obj, command)
+            if inspect.ismethod(tmp):
+                # Special case for stream_file: if - is passed as input file, use stdin
+                # as source instead of passing filename
+                if command == pyatv.interface.Stream.stream_file.__name__ and args[0] == "-":
+                    args = [sys.stdin.buffer, *args[1:]]
+                value = await tmp(*args)
             else:
-                self.loop.create_task(self.async_send_command(command))
+                value = tmp
+
+            # Some commands might produce output themselves (especially non-API
+            # commands), so don't print the return code they might give
+            if print_result:
+                self._pretty_print(value)
+                return 0
+            return value
+
+        except NotImplementedError:
+            self.plugin.logger.exception(f"Command {command} is not supported by device")
+        except pyatv.exceptions.AuthenticationError as ex:
+            self.plugin.logger.exception(f"Authentication error: {ex}")
+        except:
+            self.plugin.logger.debug("General Exception Caught:",exc_info=True)
+            self.plugin.logger.info("Could not run this command at this time.")
+        return 1
+
+    def _pretty_print(self, data):
+        if data is None:
+            return
+        if isinstance(data, bytes):
+            self.plugin.logger.info(binascii.hexlify(data))
+        elif isinstance(data, list):
+            self.plugin.logger.info(", ".join([str(item) for item in data]))
+        else:
+            self.plugin.logger.info(data)
+
+
+    def send_command(self, command, args,  **kwargs):
+        try:
+            self.plugin.logger.debug(f"Within send_command and command & args - {command} and args {args}")
+            self.loop.create_task(self._handle_device_command(args, command))
         except:
             self.plugin.logger.exception("Error in send_command")
 
-    async def async_send_command(self, command, **kwargs):
+    async def del_async_end_command(self, command, **kwargs):
         """Send a command to one device."""
         #num_repeats = kwargs[ATTR_NUM_REPEATS]
        # delay = kwargs.get(ATTR_DELAY_SECS, DEFAULT_DELAY_SECS)
@@ -497,6 +653,7 @@ class Plugin(indigo.PluginBase):
             logging.getLogger("Plugin.HomeKit_pyHap").setLevel(logging.INFO)
 
         self._event_loop = None
+        self._another_event_loop = None
         self._async_thread = None
 
         self.logger.info(u"{0:=^130}".format(" End Initializing New Plugin  "))
@@ -638,6 +795,88 @@ class Plugin(indigo.PluginBase):
         except:
             self.logger.debug("Exception in DeviceStopCom \n", exc_info=True)
 
+    ##
+    def menu_actionRun(self, valuesDict, typeId):
+        self.logger.debug(f"Running Logging Command {valuesDict}")
+        try:
+            appleTV = int(valuesDict["appleTV"])  ## deviceID
+            action = str(valuesDict["option"])
+            something_done = False
+            deviceid = appleTV
+            device = indigo.devices[deviceid]
+
+            if action=="scandevice":
+                identifier = device.states['identifier']
+                self._event_loop.create_task(self.menu_logatvc(iden=identifier))
+                return
+            elif action == "showcommands":
+                foundDevice = False
+                for appletvManager in self.appleTVManagers:  ## will only show running devices.
+                    if int(appletvManager.device_ID) == int(deviceid):
+                        foundDevice = True
+                        self.logger.debug(f"Found correct AppleTV listener/manager. {appletvManager} and id {appletvManager.device_ID}")
+                        self._print_commands("\nRemote control", pyatv.interface.RemoteControl)
+                        self._print_commands("\nMetadata", pyatv.interface.Metadata)
+                        self._print_commands("\nPower", pyatv.interface.Power)
+                        self._print_commands("\nPlaying", pyatv.interface.Playing)
+                        self._print_commands("\nAirPlay", pyatv.interface.Stream)
+                        self._print_commands("\nDevice Info", pyatv.interface.DeviceInfo)
+                        self._print_commands("\nAudio", pyatv.interface.Audio)
+                        self._print_commands("\nApps", pyatv.interface.Apps)
+
+                        ##
+                        #self.logger.error(f" Commands: \n {retrieve_commands(pyatv.interface.RemoteControl)}")
+
+                        return
+                if foundDevice == False:
+                    self.logger.info("Device must be Paired and connected for this to function")
+                    return
+            elif action == "showFeatures":
+                foundDevice = False
+                for appletvManager in self.appleTVManagers:  ## will only show running devices.
+                    if int(appletvManager.device_ID) == int(deviceid):
+                        result = appletvManager.list_features
+                        self.logger.info(f"{result}")
+                        return
+                if foundDevice == False:
+                    self.logger.info("Device must be Paired and connected for this to function")
+                    return
+
+        except:
+            self.logger.exception("Caught exception in actionRun")
+#########################################################################
+
+    def _print_commands(self, title, api):
+        cmd_list = retrieve_commands(api)
+        commands = " - " + "\n - ".join(
+            map(lambda x: x[0] + " - " + x[1], sorted(cmd_list.items()))
+        )
+        self.logger.info(f"{title} commands:\n{commands}\n")
+
+#####################################################################
+
+
+#####################################################################
+
+    async def menu_logatvc(self, iden):
+        """Find a device and print what is playing."""
+        try:
+            self.logger.info("Discovering appleTV devices on network...")
+            atvs = await pyatv.scan(self._event_loop, identifier=iden)
+            if not atvs:
+                self.logger.info(f"This device idenity {iden} could no longer be found.")
+                return None
+            else:
+                self.logger.debug(f"atvs {atvs}")
+                output = "\n\n".join(str(result) for result in atvs)
+                self.logger.info(u"\n{0:=^165}".format(" Device: Iden: "+str(iden)))
+                self.logger.info(f"\n {output} \n")
+                self.logger.info(u"{0:=^165}".format(" End of Data "))
+        except:
+            self.logger.exception("Exception in get menu_log_atvs")
+
+#######################################################################
+
     def validateDeviceConfigUi(self, values_dict, type_id, dev_id):
         try:
             self.logger.debug(f"ValidateDevice Config UI called {values_dict} and ID {dev_id}")
@@ -678,9 +917,11 @@ class Plugin(indigo.PluginBase):
         self.debugLog(u"Starting Plugin. startup() method called.")
         self.logger.debug("Checking Plugin Prefs Directory")
         self._event_loop = asyncio.new_event_loop()
+
         asyncio.set_event_loop(self._event_loop)
         self._async_thread = threading.Thread(target=self._run_async_thread)
         self._async_thread.start()
+
 
     def shutdown(self):
         self.logger.info("Shutting down Plugin}")
@@ -737,6 +978,67 @@ class Plugin(indigo.PluginBase):
     def generate(self, values_dict, type_id="", dev_id=None):
         self.logger.debug("generate devices called")
         self._event_loop.create_task(self.get_appleTVs())
+
+    def commandListGenerator(self, filter="", values_dict=None, typeId="", targetId=0):
+        try:
+            state_list = []
+            self.logger.debug(f"commandListGenerator called {values_dict}")
+            if "appleTV" in values_dict:
+                try:
+                    deviceid = values_dict["appleTV"]
+                    for appletvManager in self.appleTVManagers:
+                        if int(appletvManager.device_ID) == int(deviceid):
+                            self.logger.debug(f"Found correct AppleTV listener/manager. {appletvManager} and id {appletvManager.device_ID}")
+
+                            cmd_list = retrieve_commands( pyatv.interface.RemoteControl)
+                            pwr_list = retrieve_commands(pyatv.interface.Power)
+                            meta_list = retrieve_commands( pyatv.interface.Metadata)
+                            play_list = retrieve_commands(pyatv.interface.Playing)
+                            stream_list = retrieve_commands(pyatv.interface.Stream)
+                            #info_list = retrieve_commands(pyatv.interface.DeviceInfo)
+                            audio_list = retrieve_commands(pyatv.interface.Audio)
+                            app_list = retrieve_commands(pyatv.interface.Apps)
+                            self.logger.debug(f"cmd_list {cmd_list}")
+                            state_list.append((-1, "%%disabled:Remote Commands:%%"))
+                            for key,value in cmd_list.items():
+                                if not "DEPRECATED" in value:
+                                    state_list.append((key,value))
+                            state_list.append((-1, "%%disabled:Power Commands:%%"))
+                            for key,value in pwr_list.items():
+                                if not "DEPRECATED" in value:
+                                    state_list.append((key,value))
+                            state_list.append((-1, "%%disabled:Playing Commands:%%"))
+                            for key, value in play_list.items():
+                                if not "DEPRECATED" in value:
+                                    state_list.append((key, value))
+                            state_list.append((-1, "%%disabled:Audio Commands:%%"))
+                            for key, value in audio_list.items():
+                                if not "DEPRECATED" in value:
+                                    state_list.append((key, key))  ##description
+                            state_list.append((-1, "%%disabled:MetaData Commands:%%"))
+                            for key, value in meta_list.items():
+                                if not "DEPRECATED" in value:
+                                    state_list.append((key, value))
+                            state_list.append((-1, "%%disabled:Streaming Commands:%%"))
+                            for key, value in stream_list.items():
+                                if not "DEPRECATED" in value:
+                                    state_list.append((key, value))
+                            state_list.append((-1, "%%disabled:App Commands:%%"))
+                            for key, value in app_list.items():
+                                if not "DEPRECATED" in value:
+                                    state_list.append((key, value))
+                           # state_list =  list(cmd_list.items()) #[(v, k) for v, k in cmd_list.items()]
+
+                except:
+                    state_list.append(("invalid", "invalid device type"))
+                    self.logger.debug("Exception commandList",exc_info=True)
+
+        except:
+            self.logger.debug("Caught Exception device State Generator", exc_info=True)
+
+        self.logger.debug(f"State List {state_list}")
+        return state_list
+
     #######################################
     ## More Menu Items
     #######################################
@@ -795,12 +1097,22 @@ class Plugin(indigo.PluginBase):
 
         appleTVid = props["appleTV"]
         command = props["command"]
+        args = props.get("args","")
+
+        if args != "":
+            command = f"{command}={args}"
+
         self.logger.info(f"Sending Command {command} to appleTV Device ID {appleTVid}")
 
         for appletvManager in self.appleTVManagers:
+            foundDevice = False
             if int(appletvManager.device_ID) == int(appleTVid):
+                foundDevice = True
                 self.logger.debug(f"Found correct AppleTV listener/manager. {appletvManager} and id {appletvManager.device_ID}")
-                appletvManager.send_command(command)
+                appletvManager.send_command(command, args)
+
+        if foundDevice == False:
+            self.logger.info("No command run.  The appleTV appears to have not been found.")
 
     async def process_playstatus(self, playstatus,  atv, time_start,deviceid):
         try:
@@ -851,7 +1163,7 @@ class Plugin(indigo.PluginBase):
 
     async def _async_stop(self):
         while True:
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(5.0)
             if self.stopThread:
                 break
 
@@ -880,9 +1192,6 @@ class Plugin(indigo.PluginBase):
 
         self.logger.debug(f"State List {state_list}")
         return state_list
-
-
-
 
     async def return_MatchedappleTVs(self, identifier):
         self.logger.debug("Returning all ATVS")

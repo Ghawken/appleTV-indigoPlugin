@@ -22,7 +22,7 @@ Double click the release indigoplugin File and install.
 All going well - nothing will happen...
 
 If you get a ton of red/errors.  
-You will need to install Command line tools for Xcode.  T It is because of the dependencies of pyatv is miniaudio which requires Clang to be installed to compile.
+You will need to install Command line tools for Xcode.   It is because of the dependencies of pyatv is miniaudio which requires Clang to be installed to compile.
 See FAQ at bottom. 
 Can try:  The below terminal command - if also fails see FAQ for manual method.
 `xcode-select —install`
@@ -77,10 +77,20 @@ You will also see the device is an Indigo Relay - so there are Turn On/Turn Off/
 
 ### Remote Control / Actions
 
-![https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/RemoteCommands.png?raw=true](https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/RemoteCommands.png?raw=true)
+![https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/remoteNew.png?raw=true](https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/remoteNew.png?raw=true)
 
 
-The plugin exposes all remote control options via commands.
+### ! New Version 0.0.15
+
+Exposes all command options supplied by very helpful pyatv library.  Progammatically creates menu, so if more down the track should be available.
+Allows sending of arguments with remote command
+To enable:
+Seeking to set position
+Set Volume (if supported)
+and Play URL
+
+For most commands the optional arguments should be left blank.
+
 
 ### Launch App
 
