@@ -21,7 +21,14 @@ If need arises, can re-press whenever new appleTV's added, and if any unneeded d
 				<Title>Generate AppleTV Devices</Title>
 				<CallbackMethod>generate</CallbackMethod>
 			</Field>
-
+    <Field id="forceDiscovery" type="checkbox" tooltip="Enabling will .">
+        <Label/>
+        <Description>Force Discovery of all Devices</Description>
+    </Field>
+       <Field id="infoLabel0aas1" type="label" fontSize='large' fontColor="blue">
+        <Label>Force Discovery may be needed for NEW appleTV devices
+        </Label>
+    </Field>
     <Field id="sep7" type="separator"/>
        <Field id="infoLabel0112" type="label" fontSize='large' fontColor="blue">
         <Label>Once devices Generated will need to be Paired via Pincode.  Open the plugin Devices EDIT screen for this information

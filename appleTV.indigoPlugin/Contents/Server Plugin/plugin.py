@@ -565,6 +565,8 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                         self.atv.power.listener.start()
                         self.plugin.logger.debug("Push updater started")
                         self.plugin.logger.info(f"{device.name} successfully connected and real-time Push updating enabled.")
+        except self.plugin.stopThread:
+            pass
         except:
             self.plugin.logger.debug("Exception Loop:",exc_info=True)
 ################################################################################
@@ -592,6 +594,8 @@ class Plugin(indigo.PluginBase):
         self.logger.addHandler(self.indigo_log_handler)
         log_dir = indigo.server.getLogsFolderPath(pluginId)
         log_dir_exists = os.path.isdir(log_dir)
+
+        self.forceAllDiscovery = False
 
         if not log_dir_exists:
             try:
@@ -692,6 +696,8 @@ class Plugin(indigo.PluginBase):
             self.indigo_log_handler.setLevel(self.logLevel)
             self.plugin_file_handler.setLevel(self.fileloglevel)
 
+            self.forceAllDiscovery = valuesDict.get('forceDiscovery', False)
+
             if self.debug3:
                 logging.getLogger("Plugin.HomeKit_pyHap").setLevel(logging.DEBUG)
             else:
@@ -748,7 +754,6 @@ class Plugin(indigo.PluginBase):
                 self.logger.info(f"Successfully Paired with appleTV. Please close Config window.")
 
             await self._appleTVpairing.close()
-
             return self._paired_credentials
 
         except pyatv.exceptions.PairingError:
@@ -759,6 +764,7 @@ class Plugin(indigo.PluginBase):
             return
         except:
             self.logger.exception("Two Pairing Exception")
+            return
 
     async def one_pairing(self, atv):
         try:
@@ -995,7 +1001,8 @@ class Plugin(indigo.PluginBase):
 
     def generate(self, values_dict, type_id="", dev_id=None):
         self.logger.debug("generate devices called")
-        self._event_loop.create_task(self.get_appleTVs())
+        forceDiscovery = values_dict["forceDiscovery"]
+        self._event_loop.create_task(self.get_appleTVs(forceDiscovery))
 
     def commandListGenerator(self, filter="", values_dict=None, typeId="", targetId=0):
         try:
@@ -1004,6 +1011,7 @@ class Plugin(indigo.PluginBase):
             if "appleTV" in values_dict:
                 try:
                     deviceid = values_dict["appleTV"]
+
                     for appletvManager in self.appleTVManagers:
                         if int(appletvManager.device_ID) == int(deviceid):
                             self.logger.debug(f"Found correct AppleTV listener/manager. {appletvManager} and id {appletvManager.device_ID}")
@@ -1313,7 +1321,7 @@ class Plugin(indigo.PluginBase):
 
     ########################################
 
-    async def get_appleTVs(self):
+    async def get_appleTVs(self, forceDiscovery):
         """Find a device and print what is playing."""
         try:
             self.logger.info("Discovering appleTV devices on network...")
@@ -1326,12 +1334,12 @@ class Plugin(indigo.PluginBase):
                 #output = "\n\n".join(str(result) for result in atvs)
                 #self.logger.info(f"{output}")
                 for atv in atvs:
-                    self.createNewDevice(atv)
+                    self.createNewDevice(atv, forceDiscovery)
 
         except:
             self.logger.exception("Exception in get appleTVs")
 
-    def createNewDevice(self, atv):
+    def createNewDevice(self, atv, forceDiscovery):
 
         ip = str(atv.address)
         name = atv.name
@@ -1348,7 +1356,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.debug(f"Found exisiting device same Identifier. Skipping: {dev.name}")
                 return
 
-        if model !=  pyatv.const.DeviceModel.Unknown:
+        if model !=  pyatv.const.DeviceModel.Unknown or forceDiscovery:
             devProps = {}
             devProps[u"isAppleTV"] = True
             devProps[u"SupportsOnState"] = False
