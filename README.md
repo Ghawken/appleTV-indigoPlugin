@@ -89,7 +89,9 @@ Seeking to set position
 Set Volume (if supported)
 and Play URL
 
-For most commands the optional arguments should be left blank.
+For most commands the optional arguments should be left blank, however can select double tap, hold etc. as the Dialog
+
+![https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/Action.png?raw=true](https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/Action.png?raw=true)
 
 
 ### Launch App

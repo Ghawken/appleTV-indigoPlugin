@@ -18,6 +18,33 @@
 			<Field id="args" type="textfield">
                 <Label>Optional Arguments:</Label>
             </Field>
+    <Field id="infoLabel100" type="label" fontSize='large' fontColor="blue">
+        <Field id="sep7c" type="separator"/>
+        <Label>
+            For most part the Optional Arguments should be left blank.
+
+            If Cmd : Up, Down, Left, Right, Select, Menu or Home:
+            Optional Arguments:  (Blank=0, 1 or 2)
+            0 - Single Tap,
+            1 - Double Tap,
+            2 - Hold
+
+            If Cmd: Change Repeat State
+            Optional Arguments:
+            0 - Off,
+            1- Repeat Current Track,
+            2 - Repeat all Tracks/Items
+
+            If Cmd: Change Shuffle State
+            Optional Arguments:
+            0 - Off,
+            1 - Shuffle Album,
+            2 - Shuffle Song level
+
+		</Label>
+    </Field>
+            <Field id="anothersimpleSeparator3a3" type="separator"/>
+
 
         </ConfigUI>
     </Action>
