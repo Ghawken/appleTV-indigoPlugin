@@ -297,10 +297,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         """Call when connection was lost."""
         try:
             self.plugin.logger.info(f"Connection to appleTV - {self.devicename} lost.")
-            self.plugin.logger.info(f"Checking that we are actually here... {self._killConnection}")
             self._killConnection = True
-            self.plugin.logger.info(f"Checking that we are actually here No 2... {self._killConnection}")
-        #self._handle_disconnect()
         except:
             self.plugin.logger.exception("Connection Lost Exception")
 
@@ -308,7 +305,6 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         """Call when connection was closed."""
         self.plugin.logger.info(f"Connection to appleTV - {self.devicename} closed.")
         self._killConnection = True
-        #self._handle_disconnect()
 
     def playstatus_update(self, updater, playstatus: pyatv.interface.Playing) -> None:
         """Call when play status was updated."""
