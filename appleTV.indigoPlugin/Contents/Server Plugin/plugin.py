@@ -39,6 +39,7 @@ try:
         RepeatState,
         ShuffleState,
     )
+    import pyatv.exceptions
     from pyatv.interface import retrieve_commands
 except:
     # error in init when can message
@@ -154,10 +155,11 @@ class UniqueQueue(Queue):
     def _get(self):
         return self.queue.pop()
 
+
 ####################################################################################
 class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListener, pyatv.interface.PowerListener):
 
-    def __init__(self, plugin, loop, atv_config,deviceid, config_appleTV):
+    def __init__(self, plugin, loop, atv_config,deviceid, config_appleTV, devicename):
         self.plugin = plugin
         self.plugin.logger.debug("Within init of AppleTVListener/all")
         self.deviceid = deviceid
@@ -165,8 +167,10 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         self.isAppleTV = config_appleTV
         self.loop = loop
         self.atv_config = atv_config
+        self.devicename = devicename
         self._app_list = None
         self.all_features = None
+        self._killConnection = False
         self._task = self.loop.create_task(self.loop_atv(self.loop, atv_config=self.atv_config, deviceid=self.deviceid))
 
     ## Add properties
@@ -196,7 +200,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         """Print a list of all features and options."""
         try:
             all_features = self.atv.features.all_features(include_unsupported=False)
-            str_return = "\nFeature list:\n---------------- \n"
+            str_return = f"\n{self.devicename}\nFeature list:\n---------------- \n"
 
             for name, feature in all_features.items():
                 str_return +=  f"{name.name}: {feature.state.name}\n"
@@ -251,7 +255,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
 
 
     def powerstate_update( self, old_state, new_state  ):
-        self.plugin.logger.debug(f"powerstate update Old {old_state} and new {new_state}")
+        self.plugin.logger.debug(f"{self.devicename} Powerstate update Old {old_state} and new {new_state}")
         device = indigo.devices[self.deviceid]
         if new_state == pyatv.const.PowerState.On:
             device.updateStateOnServer("onOffState", True)
@@ -270,14 +274,14 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             if self._task:
                 self._task.cancel()
                 self._task = None
-            self.sleep(0.2)
+
             self._task = self.loop.create_task(self.loop_atv(self.loop, atv_config=self.atv_config, deviceid=self.deviceid))
         except:
             self.plugin.logger.debugf("_handle disconnect and restart", exc_info=True)
 
     def disconnect(self):
         """Disconnect from device."""
-        self.plugin.logger.debug("Disconnecting from device")
+        self.plugin.logger.debug(f"Disconnecting from device {self.devicename}")
         self.is_on = False
         try:
             if self.atv:
@@ -291,18 +295,25 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
 
     def connection_lost(self, exception: Exception) -> None:
         """Call when connection was lost."""
-        self.plugin.logger.info("Connection to appleTV lost")
-        self._handle_disconnect()
+        try:
+            self.plugin.logger.info(f"Connection to appleTV - {self.devicename} lost.")
+            self.plugin.logger.info(f"Checking that we are actually here... {self._killConnection}")
+            self._killConnection = True
+            self.plugin.logger.info(f"Checking that we are actually here No 2... {self._killConnection}")
+        #self._handle_disconnect()
+        except:
+            self.plugin.logger.exception("Connection Lost Exception")
 
     def connection_closed(self) -> None:
         """Call when connection was closed."""
-        self.plugin.logger.info("Connection to appleTV closed.")
-        self._handle_disconnect()
+        self.plugin.logger.info(f"Connection to appleTV - {self.devicename} closed.")
+        self._killConnection = True
+        #self._handle_disconnect()
 
     def playstatus_update(self, updater, playstatus: pyatv.interface.Playing) -> None:
         """Call when play status was updated."""
         try:
-            self.plugin.logger.debug("Playstatus Update Called")
+            self.plugin.logger.debug(f"Playstatus Update Called for {self.devicename}")
             try:
                 self.task.cancel()
             except:
@@ -479,7 +490,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         try:
             atvs = await pyatv.scan(loop, identifier=identifier)
             if not atvs:
-                self.plugin.logger.info("This specific Device cannot be found.  Please try power cycling it.")
+                self.plugin.logger.info("Failed appleTV connection as this specific Device cannot be found.  Please check its network connection.")
                 return
             config = atvs[0]
             self.plugin.logger.debug(f"AppleTV:\n {config}") #{config.services[0].pairing}")
@@ -494,30 +505,20 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         except:
             self.plugin.logger.exception("Connect ATV Exception")
 
-    async def start_loop_atv(self, loop, atv_config, deviceid):
-        while True:
-            try:
-                self.loop_atv(loop, atv_config,deviceid)
-            except self.plugin.stopThread:
-                break
-            except:
-                self.plugin.logger.debug("Exception in Loop_ATV:  Should restart.", exc_info=True)
-
-
     async def loop_atv(self, loop, atv_config, deviceid):
-
+        timeretry = 10
         while True:
+            if timeretry > 600:
+                timeretry = 60
             try:
                 identifier = atv_config["identifier"]
                 airplay_credentials = atv_config["credentials"]
                 self.atv = await self.connect_atv(loop, identifier, airplay_credentials)
                 if self.atv:
-                    self.atv.push_updater.listener = self
                     self.atv.listener = self
-                    self.atv.power.listener = self
+                    self.atv.push_updater.listener = self
                     self.atv.push_updater.start()
-                    self.atv.listener.start()
-                    self.atv.power.listener.start()
+                    self.atv.power.listener = self
                     self.plugin.logger.debug("Push updater started")
                     device = indigo.devices[deviceid]
                     device.updateStateOnServer(key="status", value="Paired. Push Updating.")
@@ -528,10 +529,19 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                         await self._update_app_list()
                     while True:
                         await asyncio.sleep(20)
+                        self.plugin.logger.debug(f"Within main sleep 20 second loop killconnection {self._killConnection}")
+                        if self._killConnection:
+                            self.plugin.logger.debug("Manually raise ConnectionReset Error - Kill Current Connection")
+                            raise ConnectionResetError("Connection lost.  Raising Exception to restart loop manually.")
+                else:
+                    await asyncio.sleep(timeretry)
+                    self.plugin.logger.debug(f"Attempting to Connect again...and self._killconnection {self._killConnection}")
+                    timeretry = timeretry + 60
 
-            except self.plugin.stopThread:
-                break
-            except:
+            except ConnectionResetError:
+                self.plugin.logger.debug(f"Connection lost, ended or otherwise.  Hopefully restarting loop", exc_info=True)
+                self._killConnection = False
+            except Exception:
                 self.plugin.logger.debug("Exception in Loop_ATV:  Should restart.",exc_info=True)
     ################################################################################
 class Plugin(indigo.PluginBase):
@@ -699,7 +709,7 @@ class Plugin(indigo.PluginBase):
                     thisisappleTV = True
                 new_data["credentials"] = credentials
                 new_data["identifier"] = identifier
-                self.appleTVManagers.append( appleTVListener(self, self._event_loop, new_data, device.id, thisisappleTV ))
+                self.appleTVManagers.append( appleTVListener(self, self._event_loop, new_data, device.id, thisisappleTV, device.name ))
 
         else:
             device.updateStateOnServer(key="status", value="Starting Up")

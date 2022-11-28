@@ -125,6 +125,9 @@ The above worked for my production machine - which hit this issue.  (avoided Xco
 Currently I expose all airplay devices - Sonos included.  I do not believe these can be controlled or report status - but have not specifically tested them.
 The AppleTV devices are those we are aiming to support here.
 
+See here for more related to pyatv library
+
+## https://pyatv.dev/support/faq/
 
 # Changelog
 
