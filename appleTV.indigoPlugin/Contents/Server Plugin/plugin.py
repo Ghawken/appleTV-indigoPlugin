@@ -521,6 +521,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                     # Update app list
                     self.plugin.logger.debug("Updating app list")
                     self.plugin.logger.info(f"{device.name} successfully connected and real-time Push updating enabled.")
+                    timeretry = 10
                     if self.isAppleTV:
                         await self._update_app_list()
                     while True:
