@@ -79,7 +79,11 @@ class IndigoFileLogHandler(TimedRotatingFileHandler):
             levelno = int(record.levelno)
             if self.level <= levelno:  ## Don't do anything if level display is lower
                 new_msg = f"{path.basename(record.pathname)}:{record.funcName}:{record.lineno}"
-                record.msg =  f"{new_msg} : {record.msg}"
+                try:
+                    second_msg = record.msg % record.args
+                except:
+                    second_msg = record.msg
+                record.msg =  str(new_msg+" : "+second_msg)
                 record.args = None  ## This is the old string formatting %s issue.  Need to combine and then delete all args
                 try:
                     if self.shouldRollover(record):
@@ -164,7 +168,6 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         self._app_list = None
         self.all_features = None
         self._task = self.loop.create_task(self.loop_atv(self.loop, atv_config=self.atv_config, deviceid=self.deviceid))
-
 
     ## Add properties
     @property
@@ -288,17 +291,13 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
 
     def connection_lost(self, exception: Exception) -> None:
         """Call when connection was lost."""
-        self._remove()
+        self.plugin.logger.info("Connection to appleTV lost")
         self._handle_disconnect()
 
     def connection_closed(self) -> None:
         """Call when connection was closed."""
-        self._remove()
+        self.plugin.logger.info("Connection to appleTV closed.")
         self._handle_disconnect()
-
-    def _remove(self):
-        self.app["atv"].pop(self.identifier)
-        self.app["listeners"].remove(self)
 
     def playstatus_update(self, updater, playstatus: pyatv.interface.Playing) -> None:
         """Call when play status was updated."""
@@ -368,6 +367,9 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         try:
            # device = retrieve_commands(pyatv.DeviceCommands)
             self.plugin.logger.debug(f"_handle_device_command called - Args: {args}  Cmd:{cmd}")
+            if self.atv == None:
+                self.plugin.logger.info("Current AppleTV is not connected.  Aborting Command request.")
+                return
             ctrl = retrieve_commands(pyatv.interface.RemoteControl)
             metadata = retrieve_commands(pyatv.interface.Metadata)
             power = retrieve_commands(pyatv.interface.Power)
@@ -419,6 +421,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
 
     async def _exec_command(self, obj, command, print_result, *args):
         try:
+
             # If the command to execute is a @property, the value returned by that
             # property will be stored in tmp. Otherwise it's a coroutine and we
             # have to yield for the result and wait until it is available.
@@ -467,36 +470,6 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         except:
             self.plugin.logger.exception("Error in send_command")
 
-    async def del_async_end_command(self, command, **kwargs):
-        """Send a command to one device."""
-        #num_repeats = kwargs[ATTR_NUM_REPEATS]
-       # delay = kwargs.get(ATTR_DELAY_SECS, DEFAULT_DELAY_SECS)
-        try:
-            command=command.strip(";")
-            self.plugin.logger.debug(f"Within async send command.  Command {command}")
-            if not self.atv:
-                self.plugin.logger.info("Unable to send commands, not connected to %s", self.name)
-                return
-            attr_value = getattr(self.atv.remote_control, command, None)
-            if not attr_value:
-                raise ValueError("Command not found. Exiting sequence")
-            self.plugin.logger.debug("Sending command %s", command)
-            await attr_value()
-            await asyncio.sleep(0.1)
-        except ValueError:
-            self.plugin.logger.info(f"This Command is not supported.  Command in question = {command}")
-            self.plugin.logger.debug(f"Exception:",exc_info=True)
-            return
-        except pyatv.exceptions.NotSupportedError:
-            self.plugin.logger.info(f"This Command is not supported.  Command in question = {command}")
-            self.plugin.logger.debug(f"Exception:", exc_info=True)
-            return
-        except pyatv.exceptions.CommandError:
-            self.plugin.logger.debug("Command Error in Send Command", exc_info=True)
-            self.plugin.logger.info(f"Command Failed.  Command in question = {command}")
-        except:
-            self.plugin.logger.exception("Async send command exception.")
-
     def playstatus_error(self, updater, exception: Exception) -> None:
         self.plugin.logger.debug("Error in Playstatus", exc_info=True)
 
@@ -506,7 +479,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         try:
             atvs = await pyatv.scan(loop, identifier=identifier)
             if not atvs:
-                self.plugin.logger.info("No devices found, will retry")
+                self.plugin.logger.info("This specific Device cannot be found.  Please try power cycling it.")
                 return
             config = atvs[0]
             self.plugin.logger.debug(f"AppleTV:\n {config}") #{config.services[0].pairing}")
@@ -521,57 +494,46 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         except:
             self.plugin.logger.exception("Connect ATV Exception")
 
-    async def loop_atv(self, loop, atv_config, deviceid):
-        try:
-            identifier = atv_config["identifier"]
-            airplay_credentials = atv_config["credentials"]
-            self.atv = await self.connect_atv(loop, identifier, airplay_credentials)
-            if self.atv:
-                listener = self
-                self.atv.push_updater.listener = listener
-                self.atv.listener = listener
-                self.atv.power.listener = listener
-                self.atv.push_updater.start()
-                self.atv.listener.start()
-                self.atv.power.listener.start()
-                self.plugin.logger.debug("Push updater started")
-                device = indigo.devices[deviceid]
-                device.updateStateOnServer(key="status", value="Paired. Push Updating.")
-                # Update app list
-                self.plugin.logger.debug("Updating app list")
-                self.plugin.logger.info(f"{device.name} successfully connected and real-time Push updating enabled.")
-                if self.isAppleTV:
-                    await self._update_app_list()
+    async def start_loop_atv(self, loop, atv_config, deviceid):
+        while True:
+            try:
+                self.loop_atv(loop, atv_config,deviceid)
+            except self.plugin.stopThread:
+                break
+            except:
+                self.plugin.logger.debug("Exception in Loop_ATV:  Should restart.", exc_info=True)
 
-            while True:
-                await asyncio.sleep(20)
-                try:
-                    pass
-                    #self.atv.metadata.app
-                except self.plugin.stopThread:
-                    break
-                except:
-                    self.plugin.logger.debug("Exception:", exc_info=True)
-                    self.plugin.logger.debug("Reconnecting to Apple TV")
-                    # reconnect to apple tv
-                    self.atv = await self.connect_atv(loop, identifier, airplay_credentials)
-                    if self.atv:
-                        listener = self
-                        self.atv.push_updater.listener = listener
-                        self.atv.listener = listener
-                        self.atv.power.listener = listener
-                        self.atv.push_updater.start()
-                        self.atv.listener.start()
-                        self.atv.power.listener.start()
-                        self.plugin.logger.debug("Push updater started")
-                        self.plugin.logger.info(f"{device.name} successfully connected and real-time Push updating enabled.")
-                        if self.isAppleTV:
-                            await self._update_app_list()
-        except self.plugin.stopThread:
-            pass
-        except:
-            self.plugin.logger.debug("Exception Loop:",exc_info=True)
-################################################################################
+
+    async def loop_atv(self, loop, atv_config, deviceid):
+
+        while True:
+            try:
+                identifier = atv_config["identifier"]
+                airplay_credentials = atv_config["credentials"]
+                self.atv = await self.connect_atv(loop, identifier, airplay_credentials)
+                if self.atv:
+                    self.atv.push_updater.listener = self
+                    self.atv.listener = self
+                    self.atv.power.listener = self
+                    self.atv.push_updater.start()
+                    self.atv.listener.start()
+                    self.atv.power.listener.start()
+                    self.plugin.logger.debug("Push updater started")
+                    device = indigo.devices[deviceid]
+                    device.updateStateOnServer(key="status", value="Paired. Push Updating.")
+                    # Update app list
+                    self.plugin.logger.debug("Updating app list")
+                    self.plugin.logger.info(f"{device.name} successfully connected and real-time Push updating enabled.")
+                    if self.isAppleTV:
+                        await self._update_app_list()
+                    while True:
+                        await asyncio.sleep(20)
+
+            except self.plugin.stopThread:
+                break
+            except:
+                self.plugin.logger.debug("Exception in Loop_ATV:  Should restart.",exc_info=True)
+    ################################################################################
 class Plugin(indigo.PluginBase):
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
         indigo.PluginBase.__init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
@@ -615,7 +577,9 @@ class Plugin(indigo.PluginBase):
         ################################################################################
         # Finish Logging changes
         ################################################################################
-        logging.getLogger("Plugin.pyatv").setLevel(logging.THREADDEBUG)
+
+
+
         try:
             import pyatv
         except ImportError:
@@ -663,14 +627,15 @@ class Plugin(indigo.PluginBase):
         self.debug8 = self.pluginPrefs.get('debug8', False)
         self.debug9 = self.pluginPrefs.get('debug9', False)
 
-        if self.debug3:
-            logging.getLogger("Plugin.HomeKit_pyHap").setLevel(logging.DEBUG)
-        else:
-            logging.getLogger("Plugin.HomeKit_pyHap").setLevel(logging.INFO)
-
         self._event_loop = None
         self._another_event_loop = None
         self._async_thread = None
+
+        if self.debug1:
+            pyatv_logging = logging.getLogger("pyatv")
+            pyatv_logging.setLevel(logging.THREADDEBUG)
+            #pyatv_logging.addHandler(self.indigo_log_handler)
+            pyatv_logging.addHandler(self.plugin_file_handler)
 
         self.logger.info(u"{0:=^130}".format(" End Initializing New Plugin  "))
 
@@ -708,6 +673,11 @@ class Plugin(indigo.PluginBase):
             self.logger.debug(u"logLevel = " + str(self.logLevel))
             self.logger.debug(u"User prefs saved.")
             self.logger.debug(u"Debugging on (Level: {0})".format(self.logLevel))
+            if self.debug1:
+                pyatv_logging = logging.getLogger("pyatv")
+                pyatv_logging.setLevel(logging.THREADDEBUG)
+                # pyatv_logging.addHandler(self.indigo_log_handler)
+                pyatv_logging.addHandler(self.plugin_file_handler)
         return True
 
     def deviceStartComm(self, device):
@@ -1240,7 +1210,7 @@ class Plugin(indigo.PluginBase):
                 break
 
     def menu_callback(self, valuesDict, *args, **kwargs):  # typeId, devId):
-        self.logger.debug("Subtype callback: returning valuesDict \n {}".format(valuesDict))
+        self.logger.debug(f"Menu callback: returning valuesDict: \n {valuesDict}")
         return valuesDict
 
     def app_list_generator(self, filter="", values_dict=None, typeId="", targetId=0):
