@@ -643,6 +643,10 @@ class Plugin(indigo.PluginBase):
             pyatv_logging.setLevel(logging.THREADDEBUG)
             #pyatv_logging.addHandler(self.indigo_log_handler)
             pyatv_logging.addHandler(self.plugin_file_handler)
+        else:
+            pyatv_logging = logging.getLogger("pyatv")
+            pyatv_logging.setLevel(logging.INFO)
+            pyatv_logging.addHandler(self.plugin_file_handler)
 
         self.logger.info(u"{0:=^130}".format(" End Initializing New Plugin  "))
 
@@ -685,6 +689,11 @@ class Plugin(indigo.PluginBase):
                 pyatv_logging.setLevel(logging.THREADDEBUG)
                 # pyatv_logging.addHandler(self.indigo_log_handler)
                 pyatv_logging.addHandler(self.plugin_file_handler)
+            else:
+                pyatv_logging = logging.getLogger("pyatv")
+                pyatv_logging.setLevel(logging.INFO)
+                pyatv_logging.addHandler(self.plugin_file_handler)
+
         return True
 
     def deviceStartComm(self, device):
