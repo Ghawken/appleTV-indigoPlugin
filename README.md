@@ -141,6 +141,17 @@ Restart Device after pairing (avoiding need to restart plugin if connection issu
 Fine tuning some aspects.
 More repeated reporting of PowerState
 
+0.0.22
+Fix for debug1 not turning off until 
+
+0.0.23
+
+Move to unicast connection for those devices that have a IP
+(may help with intermittent connection issues)
+Alternate back to multicast after 3 failures.
+Messaging around commands being sent with arguments when they shouldnt
+Move back to standard indigo file Logging given issue resolved.
+
 
 
 

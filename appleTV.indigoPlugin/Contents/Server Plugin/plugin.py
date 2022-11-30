@@ -5,12 +5,14 @@
 Author: GlennNZ
 
 """
-
+import logging
 import threading
 
 import traceback
 import inspect
 import asyncio
+
+import ipaddress
 
 from queue import Queue
 
@@ -49,7 +51,6 @@ import sys
 import os
 from os import path
 
-import logging
 
 # import applescript
 import xml.dom.minidom
@@ -74,29 +75,29 @@ except:
 # New Indigo FileHandler, only pass higher message and manage the string formatting issue
 # where for some reason %s not substituted in filehandler, but in log without problem
 ################################################################################
-class IndigoFileLogHandler(TimedRotatingFileHandler):
-    def emit(self, record, **kwargs):
-        try:
-            levelno = int(record.levelno)
-            if self.level <= levelno:  ## Don't do anything if level display is lower
-                new_msg = f"{path.basename(record.pathname)}:{record.funcName}:{record.lineno}"
-                try:
-                    second_msg = record.msg % record.args
-                except:
-                    second_msg = record.msg
-                record.msg =  str(new_msg+" : "+second_msg)
-                record.args = None  ## This is the old string formatting %s issue.  Need to combine and then delete all args
-                try:
-                    if self.shouldRollover(record):
-                        self.doRollover()
-                    logging.FileHandler.emit(self, record)
-                except Exception:
-                    self.handleError(record)
-
-        except Exception as ex:
-            indigo.server.log(f"Error in Loggging FileHandler: {ex}")
-            indigo.server.log(f"Error in Logging FileHandler execution:\n\n{traceback.format_exc(30)}", isError=False)
-            pass
+# class IndigoFileLogHandler(TimedRotatingFileHandler):
+#     def emit(self, record, **kwargs):
+#         try:
+#             levelno = int(record.levelno)
+#             if self.level <= levelno:  ## Don't do anything if level display is lower
+#                 new_msg = f"{path.basename(record.pathname)}:{record.funcName}:{record.lineno}"
+#                 try:
+#                     second_msg = record.msg % record.args
+#                 except:
+#                     second_msg = record.msg
+#                 record.msg =  str(new_msg+" : "+second_msg)
+#                 record.args = None  ## This is the old string formatting %s issue.  Need to combine and then delete all args
+#                 try:
+#                     if self.shouldRollover(record):
+#                         self.doRollover()
+#                     logging.FileHandler.emit(self, record)
+#                 except Exception:
+#                     self.handleError(record)
+#
+#         except Exception as ex:
+#             indigo.server.log(f"Error in Loggging FileHandler: {ex}")
+#             indigo.server.log(f"Error in Logging FileHandler execution:\n\n{traceback.format_exc(30)}", isError=False)
+#             pass
 ################################################################################
 # New Indigo Log Handler - display more useful info when debug logging
 # update to python3 changes
@@ -170,6 +171,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         self.devicename = devicename
         self._app_list = None
         self.all_features = None
+        self.cast = "unicast"
         self._killConnection = False
         self._task = self.loop.create_task(self.loop_atv(self.loop, atv_config=self.atv_config, deviceid=self.deviceid))
 
@@ -454,6 +456,10 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         except pyatv.exceptions.AuthenticationError as ex:
             self.plugin.logger.info(f"Authentication error: {ex}")
             self.plugin.logger.debug(f"Authentication error: {ex}", exc_info=True)
+        except TypeError:
+            self.plugin.logger.info(f"Run Command {command} Failed with a 'TypeError'.  Normally this means you have specified Optional Arguments for a command that should have none. ")
+            self.plugin.logger.info(f"Please check and delete Optional Arguments in the action.")
+            self.plugin.logger.debug(f"Type Error caught.  ?Optional Arguments.  Full Error:",exc_info=True)
         except:
             self.plugin.logger.debug("General Exception Caught:",exc_info=True)
             self.plugin.logger.info("Could not run this command at this time.")
@@ -481,10 +487,15 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         self.plugin.logger.debug("Error in Playstatus", exc_info=True)
 
 
-    async def connect_atv(self, loop, identifier, airplay_credentials):
+    async def connect_atv(self, loop, identifier, airplay_credentials, ipaddress, cast):
         """Find a device and print what is playing."""
         try:
-            atvs = await pyatv.scan(loop, identifier=identifier)
+            if cast == "unicast":
+                self.plugin.logger.info(f"Scanning for device using IP address: {ipaddress} and using Unicast.")
+                atvs = await pyatv.scan(loop, identifier=identifier, hosts=[ipaddress])
+            else:
+                self.plugin.logger.info(f"Scanning for device using Multicast.")
+                atvs = await pyatv.scan(loop, identifier=identifier)
             if not atvs:
                 self.plugin.logger.info("Failed appleTV connection as this specific Device cannot be found.  Please check its network connection.")
                 return
@@ -494,6 +505,8 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                 config.set_credentials(pyatv.Protocol.AirPlay, airplay_credentials)
                 config.set_credentials(pyatv.Protocol.Companion, airplay_credentials)
                 config.set_credentials(pyatv.Protocol.RAOP, airplay_credentials)
+                config.set_credentials(pyatv.Protocol.DMAP, airplay_credentials)
+                config.set_credentials(pyatv.Protocol.MRP, airplay_credentials)
             else:
                 self.plugin.logger.debug(f"Not setting credentials as airplay only device..")
             self.plugin.logger.debug(f"Connecting to {config.address}")
@@ -501,15 +514,30 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         except:
             self.plugin.logger.exception("Connect ATV Exception")
 
+    def validate_ip_address(self, address):
+        try:
+            ip = ipaddress.ip_address(address)
+            self.plugin.logger.debug(f"IP address {address} is valid. The object returned is {ip}")
+            return True
+        except ValueError:
+            self.plugin.logger.debug(f"IP address {address} is not valid")
+            return False
+
     async def loop_atv(self, loop, atv_config, deviceid):
         timeretry = 10
+        retries = 0
         while True:
             if timeretry > 600:
                 timeretry = 60
+            device = indigo.devices[deviceid]
+            ipaddress = device.states["ip"]
             try:
                 identifier = atv_config["identifier"]
                 airplay_credentials = atv_config["credentials"]
-                self.atv = await self.connect_atv(loop, identifier, airplay_credentials)
+                if self.validate_ip_address(ipaddress) and self.cast == "unicast":  ## startup
+                    self.atv = await self.connect_atv(loop, identifier, airplay_credentials, ipaddress, self.cast)
+                else:  ## if anything other than unicast or invalid IP use multicast
+                    self.atv = await self.connect_atv(loop, identifier, airplay_credentials, "", self.cast)
                 if self.atv:
                     self.atv.listener = self
                     self.atv.push_updater.listener = self
@@ -533,7 +561,16 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                 else:
                     await asyncio.sleep(timeretry)
                     self.plugin.logger.debug(f"Attempting to Connect again...and self._killconnection {self._killConnection}")
-                    timeretry = timeretry + 60
+                    timeretry = timeretry + 10
+                    retries = retries + 1
+                    if retries>=3:
+                        self.plugin.logger.debug("Changing to Multicast Discovery as unicast IP based has failed.")
+                        if self.cast == "unicast":
+                            self.cast="multicast"
+                        else:
+                            self.cast=="unicast"
+                        ### go from one to another in sets of 3...
+                        retries = 0
 
             except ConnectionResetError:
                 self.plugin.logger.debug(f"Connection lost, ended or otherwise.  Hopefully restarting loop", exc_info=True)
@@ -541,10 +578,12 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             except Exception:
                 self.plugin.logger.debug("Exception in Loop_ATV:  Should restart.",exc_info=True)
     ################################################################################
+
 class Plugin(indigo.PluginBase):
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
         indigo.PluginBase.__init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
-
+        pfmt = logging.Formatter('%(asctime)s.%(msecs)03d\t%(levelname)s\t%(name)s.%(funcName)s:%(filename)s:%(lineno)s:\t%(message)s', datefmt='%d-%m-%Y %H:%M:%S')
+        self.plugin_file_handler.setFormatter(pfmt)
         ################################################################################
         # Setup Logging
         ################################################################################
@@ -557,35 +596,13 @@ class Plugin(indigo.PluginBase):
             self.fileloglevel = logging.DEBUG
 
         self.logger.removeHandler(self.indigo_log_handler)
-        self.logger.removeHandler(self.plugin_file_handler)
+
         self.indigo_log_handler = IndigoLogHandler(pluginDisplayName, logging.INFO)
         ifmt = logging.Formatter("%(message)s")
         self.indigo_log_handler.setFormatter(ifmt)
         self.indigo_log_handler.setLevel(self.logLevel)
         self.logger.addHandler(self.indigo_log_handler)
-        log_dir = indigo.server.getLogsFolderPath(pluginId)
-        log_dir_exists = os.path.isdir(log_dir)
-
         self.forceAllDiscovery = False
-
-        if not log_dir_exists:
-            try:
-                os.mkdir(log_dir)
-                log_dir_exists = True
-            except:
-                indigo.server.log(u"unable to create plugin log directory - logging to the system console", isError=True)
-                self.plugin_file_handler = logging.StreamHandler()
-        if log_dir_exists:
-            self.plugin_file_handler = IndigoFileLogHandler("%s/plugin.log" % log_dir, when='midnight', backupCount=5)
-        pfmt = logging.Formatter('%(asctime)s.%(msecs)03d\t[%(levelname)8s] %(name)20s.%(funcName)-25s%(msg)s', datefmt='%d-%m-%Y %H:%M:%S')
-        self.plugin_file_handler.setFormatter(pfmt)
-        self.plugin_file_handler.setLevel(self.fileloglevel)
-        self.logger.addHandler(self.plugin_file_handler)
-        ################################################################################
-        # Finish Logging changes
-        ################################################################################
-
-
 
         try:
             import pyatv
@@ -618,11 +635,6 @@ class Plugin(indigo.PluginBase):
         self.logger.info("{0:<30} {1}".format("Python Directory:", sys.prefix.replace('\n', '')))
         self.logger.info("")
         self.pluginprefDirectory = '{}/Preferences/Plugins/com.GlennNZ.indigoplugin.appleTV'.format(indigo.server.getInstallFolderPath())
-
-        # Change to logging
-        pfmt = logging.Formatter('%(asctime)s.%(msecs)03d\t[%(levelname)8s] %(name)20s.%(funcName)-25s%(msg)s',
-                                 datefmt='%Y-%m-%d %H:%M:%S')
-        self.plugin_file_handler.setFormatter(pfmt)
 
         self.debug1 = self.pluginPrefs.get('debug1', False)
         self.debug2 = self.pluginPrefs.get('debug2', False)
