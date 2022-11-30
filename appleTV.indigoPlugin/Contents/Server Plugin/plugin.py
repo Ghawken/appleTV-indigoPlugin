@@ -506,7 +506,6 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                 config.set_credentials(pyatv.Protocol.Companion, airplay_credentials)
                 config.set_credentials(pyatv.Protocol.RAOP, airplay_credentials)
                 config.set_credentials(pyatv.Protocol.DMAP, airplay_credentials)
-                config.set_credentials(pyatv.Protocol.MRP, airplay_credentials)
             else:
                 self.plugin.logger.debug(f"Not setting credentials as airplay only device..")
             self.plugin.logger.debug(f"Connecting to {config.address}")

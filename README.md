@@ -124,6 +124,8 @@ The above worked for my production machine - which hit this issue.  (avoided Xco
 
 Currently I expose all airplay devices - Sonos included.  I do not believe these can be controlled or report status - but have not specifically tested them.
 The AppleTV devices are those we are aiming to support here.
+No longer - by default only appleTV devices are generated.  Use the forceDiscovery option to enable creation of all devices found.
+
 
 See here for more related to pyatv library
 
