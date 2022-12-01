@@ -169,6 +169,21 @@ Alternate back to multicast after 3 failures.
 Messaging around commands being sent with arguments when they shouldnt
 Move back to standard indigo file Logging given issue resolved.
 
+0.0.24
+Remove support for MRP disabled in OS16 and causes authentication failures
+
+0.0.25
+Re-Add MRP support, IF device supports it - without it PowerState Reporting fails/is not reliable.  It seems that MRP state is being depreciated by apple so may go completely in future.
+More debug logging of service setup.
+
+0.0.26
+Add pluginConfig option for unicast scanning of a single IP address for device creation.
+Useful with multicast fails to find device without power cycle
+Update images
+
+
+
+
 
 
 
