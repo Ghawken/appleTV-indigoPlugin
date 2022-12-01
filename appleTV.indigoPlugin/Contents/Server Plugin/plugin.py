@@ -156,7 +156,6 @@ class UniqueQueue(Queue):
     def _get(self):
         return self.queue.pop()
 
-
 ####################################################################################
 class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListener, pyatv.interface.PowerListener):
 
@@ -257,14 +256,17 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
 
 
     def powerstate_update( self, old_state, new_state  ):
-        self.plugin.logger.debug(f"{self.devicename} Powerstate update Old {old_state} and new {new_state}")
-        device = indigo.devices[self.deviceid]
-        if new_state == pyatv.const.PowerState.On:
-            device.updateStateOnServer("onOffState", True)
-            device.updateStateImageOnServer(indigo.kStateImageSel.PowerOn)
-        elif new_state == pyatv.const.PowerState.Off:
-            device.updateStateOnServer("onOffState", False)
-            device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
+        try:
+            self.plugin.logger.debug(f"{self.devicename} Powerstate update Old {old_state} and new {new_state}")
+            device = indigo.devices[self.deviceid]
+            if new_state == pyatv.const.PowerState.On:
+                device.updateStateOnServer("onOffState", True)
+                device.updateStateImageOnServer(indigo.kStateImageSel.PowerOn)
+            elif new_state == pyatv.const.PowerState.Off:
+                device.updateStateOnServer("onOffState", False)
+                device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
+        except:
+            self.plugin.logger.debug("Exception in Powerstate Updatee",exc_info=True)
 
 
     def _handle_disconnect(self):
@@ -502,10 +504,15 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             config = atvs[0]
             self.plugin.logger.debug(f"AppleTV:\n {config}") #{config.services[0].pairing}")
             if self.isAppleTV:
-                config.set_credentials(pyatv.Protocol.AirPlay, airplay_credentials)
-                config.set_credentials(pyatv.Protocol.Companion, airplay_credentials)
-                config.set_credentials(pyatv.Protocol.RAOP, airplay_credentials)
-                config.set_credentials(pyatv.Protocol.DMAP, airplay_credentials)
+                for service in config.services:
+                    self.plugin.logger.debug(f"\nService Protocol: {service.protocol}\nServicePort:{service.port}\nServiceEnabled:{service.enabled}\nServiceProperties:{service.properties}\nServicePairing:{service.pairing}\nServiceIdent:{service.identifier}")
+                    if service.enabled:
+                        config.set_credentials(service.protocol, airplay_credentials)
+                        self.plugin.logger.debug(f"Set Credentials {airplay_credentials} for service {service.protocol}")
+                    else:
+                        self.plugin.logger.info(f"{service.protocol} is disabled on this device.  This may impact functionality")
+                        if service.protocol == pyatv.Protocol.MRP:
+                            self.plugin.logger.info(f"{self.devicename} has MRP Protocol disabled on this device.  This will impact PowerState reporting.")
             else:
                 self.plugin.logger.debug(f"Not setting credentials as airplay only device..")
             self.plugin.logger.debug(f"Connecting to {config.address}")
@@ -541,7 +548,8 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                     self.atv.listener = self
                     self.atv.push_updater.listener = self
                     self.atv.push_updater.start()
-                    self.atv.power.listener = self
+                    self.atv.power.listener =self
+
                     self.plugin.logger.debug("Push updater started")
                     device = indigo.devices[deviceid]
                     device.updateStateOnServer(key="status", value="Paired. Push Updating.")
