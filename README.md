@@ -34,8 +34,23 @@ Can try:  The below terminal command - if also fails see FAQ for manual method.
 ![https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/pluginConfig.png?raw=true](https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/pluginConfig.png?raw=true)
 
 This one above.
-Press the "Generate AppleTV Devices"
+Press the "Generate AppleTV Devices" - with some options if devices not found.
 
+Options:
+Force Discovery of all Devices:
+This will create indigo devices for all airplay devices the plugin via library pyatv can find.
+Any non-appleTV/Homepods (untested) will not function and ideally should be deleted.
+THis is needed for the newer appleTV devices which are registered as yet such as 4k Gen 3 appleTV
+
+Scan a single IP address
+If your device is not found without using this option, you can enter its IP address and being a unicast scan based on IP
+This is more robust that a wider network multicast scan.
+If you device is not found with multicast, but correctly found with unicast you should assign it a fixed IP address
+(router level - outside of plugin)
+If not, when it's IP changes the plugin will loose it altogether.
+
+Generate AppleTV Devices
+Using the options above.
 This will search your network for appleTV device and generate plugin Devices corresponding.
 These devices will be located in the main device folder, but can be moved anywhere you like later.
 You can re-press and re-press the button (if you like), and new devices should not duplicate.
