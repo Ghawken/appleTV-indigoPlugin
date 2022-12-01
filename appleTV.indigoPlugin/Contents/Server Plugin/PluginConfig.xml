@@ -13,22 +13,43 @@
         <Label>Press the Below button to Generate Indigo Plugin AppleTV Devices.  They are created in main directory and thereafter can be moved.
 
 If need arises, can re-press whenever new appleTV's added, and if any unneeded devices just delete.
+
+If you cannot connect to your device, try power cycling it first, or allocate it a fixed IP address and use the Scan single IP address feature below.
         </Label>
     </Field>
-        <Field id="sep7121" type="separator"/>
+        <Field id="sep7121ab" type="separator"/>
+    <Field id="forceDiscovery" type="checkbox" defaultValue="false" tooltip="Enabling will discovery all devices including non-appleTVs .">
+        <Label/>
+        <Description>Force Discovery of all Devices</Description>
+    </Field>
+       <Field id="infoLabel0aas1" type="label" fontSize="small">
+        <Label>Force Discovery may be needed for NEW appleTV devices, 4k gen3+
+        </Label>
+    </Field>
+        <Field id="sep7121abc" type="separator"/>
+      <Field id="scanIPaddress" type="checkbox" defaultValue="false" tooltip="Enabling will scan a specific IP address only." >
+        <Label/>
+        <Description>Scan a single IP address</Description>
+    </Field>
+           <Field id="infoLabel0asaas1" type="label" fontSize="small">
+        <Label>Enabling this will scan the single provided IP address for your device.  This uses unicast which often succeeds where a wider network scan (multicast) has failed.
+        </Label>
+    </Field>
+    		<Field id="IPaddress"
+				   type="textfield"
+				   tooltip="Enter your devices IP address"
+				   default=""
+                    visibleBindingId="scanIPaddress" visibleBindingValue="true" >
+				<Label>IP address:</Label>
+			</Field>
+
+    <Field id="sep7121" type="separator"/>
 			<Field id="save" type="button"  alignWithControl="true" fontSize="large" fontColor="red" >
 				<Label>Click Here to Generate AppleTV Devices: </Label>
 				<Title>Generate AppleTV Devices</Title>
 				<CallbackMethod>generate</CallbackMethod>
 			</Field>
-    <Field id="forceDiscovery" type="checkbox" tooltip="Enabling will .">
-        <Label/>
-        <Description>Force Discovery of all Devices</Description>
-    </Field>
-       <Field id="infoLabel0aas1" type="label" fontSize='large' fontColor="blue">
-        <Label>Force Discovery may be needed for NEW appleTV devices
-        </Label>
-    </Field>
+
     <Field id="sep7" type="separator"/>
        <Field id="infoLabel0112" type="label" fontSize='large' fontColor="blue">
         <Label>Once devices Generated will need to be Paired via Pincode.  Open the plugin Devices EDIT screen for this information

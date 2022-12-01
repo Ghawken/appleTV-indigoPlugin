@@ -1009,7 +1009,26 @@ class Plugin(indigo.PluginBase):
     def generate(self, values_dict, type_id="", dev_id=None):
         self.logger.debug("generate devices called")
         forceDiscovery = values_dict["forceDiscovery"]
-        self._event_loop.create_task(self.get_appleTVs(forceDiscovery))
+        scanIPaddress = values_dict.get("scanIPaddress", False)
+        IPaddress = values_dict.get("IPaddress", "")
+
+        if scanIPaddress:
+            if IPaddress !="" and self.validate_ip_address(IPaddress):
+                self._event_loop.create_task(self.get_appleTVs_IP(forceDiscovery, hosts=IPaddress))
+            else:
+                self.logger.info("Invalid IP Address, please correct or unselect scan single IP address")
+                return
+        else:
+            self._event_loop.create_task(self.get_appleTVs(forceDiscovery))
+
+    def validate_ip_address(self, address):
+        try:
+            ip = ipaddress.ip_address(address)
+            self.logger.debug(f"IP address {address} is valid. The object returned is {ip}")
+            return True
+        except ValueError:
+            self.logger.debug(f"IP address {address} is not valid")
+            return False
 
     def commandListGenerator(self, filter="", values_dict=None, typeId="", targetId=0):
         try:
@@ -1378,9 +1397,25 @@ class Plugin(indigo.PluginBase):
                 #self.logger.info(f"{output}")
                 for atv in atvs:
                     self.createNewDevice(atv, forceDiscovery)
-
         except:
             self.logger.exception("Exception in get appleTVs")
+
+    async def get_appleTVs_IP(self, forceDiscovery, hosts):
+        """Find a device and print what is playing."""
+        try:
+            self.logger.info(f"Scanning IP address: {hosts} for an appleTV device, and creating Indigo device if doesn't already exist")
+            atvs = await pyatv.scan(self._event_loop, hosts=[hosts])
+            if not atvs:
+                self.logger.info("No device found")
+                return None
+            else:
+                self.logger.debug(f"atvs {atvs}")
+                #output = "\n\n".join(str(result) for result in atvs)
+                #self.logger.info(f"{output}")
+                for atv in atvs:
+                    self.createNewDevice(atv, forceDiscovery)
+        except:
+            self.logger.exception("Exception in get appleTVs_IP")
 
     def createNewDevice(self, atv, forceDiscovery):
 
