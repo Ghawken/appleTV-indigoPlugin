@@ -75,13 +75,14 @@
                 <CallbackMethod>menu_callback</CallbackMethod>
 			</Field>
             <Field id="width" type="textfield" defaultValue="">
-                <Label>Width:</Label>
+                <Label>Width (optional):</Label>
             </Field>
 
     <Field id="infoLabel100" type="label" fontSize='large' fontColor="blue">
-        <Field id="sep7c" type="separator"/>
         <Label>
 Artwork will be saved to User/Pictures/Indigo-AppleTV/ Folder.
+Width can be unspecified in which case default of 512 used.
+Will maintain aspect ratio and auto adjust Height.
 		</Label>
     </Field>
             <Field id="anothersimpleSeparator3a3" type="separator"/>
