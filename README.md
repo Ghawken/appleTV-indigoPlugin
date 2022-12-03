@@ -181,7 +181,8 @@ Add pluginConfig option for unicast scanning of a single IP address for device c
 Useful with multicast fails to find device without power cycle
 Update images
 
-
+0.0.27
+Add action to download artwork
 
 
 

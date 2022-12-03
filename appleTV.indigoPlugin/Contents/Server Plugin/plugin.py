@@ -374,6 +374,19 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         args = cmd[equal_sign + 1:].split(",")
         return command, self._parse_args(command, args)
 
+    async def async_artwork_save(self, filename, width=None, height=None):
+        """Download artwork and save it to artwork.png."""
+        try:
+            artwork = await self.atv.metadata.artwork(width=width, height=height)
+            if artwork is not None:
+                with open(filename, "wb") as file:
+                    file.write(artwork.bytes)
+                    self.plugin.logger.debug(f"Artwork Downloaded , mimetype {artwork.mimetype}")
+            else:
+                self.plugin.logger.info("No artwork is currently available.")
+        except:
+            self.plugin.logger.exception("async artwork save exception")
+
     async def _handle_device_command(self, args, cmd ):
         try:
            # device = retrieve_commands(pyatv.DeviceCommands)
@@ -484,6 +497,13 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             self.loop.create_task(self._handle_device_command(args, command))
         except:
             self.plugin.logger.exception("Error in send_command")
+
+    def save_artwork(self, filename, width, heigth,  **kwargs):
+        try:
+            self.plugin.logger.debug(f"Within Save Artwork Filename: {filename}, width {width}")
+            self.loop.create_task(self.async_artwork_save(filename, width, None))
+        except:
+            self.plugin.logger.exception("Error in save_Artwork")
 
     def playstatus_error(self, updater, exception: Exception) -> None:
         self.plugin.logger.debug("Error in Playstatus", exc_info=True)
@@ -666,6 +686,9 @@ class Plugin(indigo.PluginBase):
             pyatv_logging = logging.getLogger("pyatv")
             pyatv_logging.setLevel(logging.INFO)
             pyatv_logging.addHandler(self.plugin_file_handler)
+
+        MAChome = os.path.expanduser("~") + "/"
+        self.saveDirectory = MAChome + "Documents/Indigo-appleTV/"
 
         self.logger.info(u"{0:=^130}".format(" End Initializing New Plugin  "))
 
@@ -953,6 +976,16 @@ class Plugin(indigo.PluginBase):
         self._async_thread = threading.Thread(target=self._run_async_thread)
         self._async_thread.start()
 
+        MAChome = os.path.expanduser("~") + "/"
+        self.saveDirectory = MAChome + "Pictures/Indigo-appleTV/"
+
+        try:
+            if not os.path.exists(self.saveDirectory):
+                os.makedirs(self.saveDirectory)
+        except:
+            self.logger.error(u'Error Accessing Save Directory. ')
+            pass
+
 
     def shutdown(self):
         self.logger.info("Shutting down Plugin")
@@ -1201,6 +1234,39 @@ class Plugin(indigo.PluginBase):
 
         if foundDevice == False:
             self.logger.info("No command run.  The appleTV appears to have not been found.")
+
+    def saveArtwork(self, valuesDict, typeId):
+
+        self.logger.debug(f"saveArtwork Called {valuesDict} & {typeId}")
+        props = valuesDict.props
+        self.logger.debug(f"Props equal: {props}")
+
+        if props["appleTV"] =="" or props["appleTV"]=="":
+            self.logger.info("No AppleTV selected.")
+            return
+
+        width = None
+        if props["width"] == "":
+                width = None
+        else:
+            try:
+                width = int(props["width"])
+            except:
+                self.logger.debug("Width Conversion, valueError at at guess.  Skipping.", exc_info=True)
+                width = None
+
+        appleTVid = props["appleTV"]
+        self.logger.info(f"Saving current Artwork Width= {width} to appleTV Device ID {appleTVid}")
+        foundDevice = False
+        for appletvManager in self.appleTVManagers:
+
+            if int(appletvManager.device_ID) == int(appleTVid):
+                foundDevice = True
+                self.logger.debug(f"Found correct AppleTV listener/manager. {appletvManager} and id {appletvManager.device_ID}")
+                appletvManager.save_artwork(f"{self.saveDirectory}/{appletvManager.devicename}_Artwork.png", width, None)
+
+        if foundDevice == False:
+            self.logger.info("No artwork saved.  The appleTV appears to have not been found.")
 
     async def process_playstatus(self, playstatus,  atv, time_start,deviceid, isAppleTV):
         try:

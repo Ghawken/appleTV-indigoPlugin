@@ -64,5 +64,31 @@
 			</Field>
         </ConfigUI>
     </Action>
+
+           <Action id="saveArtwork">
+        <Name>Save current Artwork</Name>
+        <CallbackMethod>saveArtwork</CallbackMethod>
+        <ConfigUI>
+			<Field id="appleTV" type="menu" defaultValue="0" tooltip="select appleTV " dynamicReload="True">
+				 <List class="indigo.devices" filter="self.appleTV"/>
+				<Label>Select Apple Tv:</Label>
+                <CallbackMethod>menu_callback</CallbackMethod>
+			</Field>
+            <Field id="width" type="textfield" defaultValue="">
+                <Label>Width:</Label>
+            </Field>
+
+    <Field id="infoLabel100" type="label" fontSize='large' fontColor="blue">
+        <Field id="sep7c" type="separator"/>
+        <Label>
+Artwork will be saved to User/Pictures/Indigo-AppleTV/ Folder.
+		</Label>
+    </Field>
+            <Field id="anothersimpleSeparator3a3" type="separator"/>
+
+
+        </ConfigUI>
+    </Action>
+
 </Actions>
 
