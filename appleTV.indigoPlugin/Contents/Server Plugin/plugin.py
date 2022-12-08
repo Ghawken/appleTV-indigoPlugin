@@ -40,6 +40,7 @@ try:
         Protocol,
         RepeatState,
         ShuffleState,
+        PairingRequirement
     )
     import pyatv.exceptions
     from pyatv.interface import retrieve_commands
@@ -159,12 +160,14 @@ class UniqueQueue(Queue):
 ####################################################################################
 class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListener, pyatv.interface.PowerListener):
 
-    def __init__(self, plugin, loop, atv_config,deviceid, config_appleTV, devicename):
+    def __init__(self, plugin, loop, atv_config,deviceid, config_appleTV, thisisHomePod, devicename):
         self.plugin = plugin
         self.plugin.logger.debug("Within init of AppleTVListener/all")
         self.deviceid = deviceid
         self.atv = None
-        self.isAppleTV = config_appleTV
+        #self.isAppleTV = config_appleTV
+        self.isAppleTV = None ## generate this internally in this service
+        self.isHomePod = thisisHomePod
         self.loop = loop
         self.atv_config = atv_config
         self.devicename = devicename
@@ -232,17 +235,21 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             try:
                 apps = await self.atv.apps.app_list()
             except pyatv.exceptions.NotSupportedError:
-                self.plugin.logger.error("Listing apps is not supported", exc_info=True)
+                self.plugin.logger.debug("Listing apps is not supported", exc_info=True)
             except pyatv.exceptions.ProtocolError:
-                self.plugin.logger.exception("Failed to update app list")
+                self.plugin.logger.debug("Failed to update app list", exc_info=True)
             else:
                 self._app_list = {
                     app.name: app.identifier
                     for app in sorted(apps, key=lambda app: app.name.lower())
                 }
                 self.plugin.logger.debug(f"{self._app_list}")
+        except pyatv.exceptions.NotSupportedError:
+            self.plugin.logger.info("App Listing not supported on this device")
+            self._app_list = {}
+            return
         except:
-            self.plugin.logger.exception("Update App list issue")
+            self.plugin.logger.debug("Update App list issue", exc_info=True)
 
     def power_on(self):
         if self.atv !=None:
@@ -514,27 +521,33 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         try:
             if cast == "unicast":
                 self.plugin.logger.info(f"Scanning for device using IP address: {ipaddress} and using Unicast.")
-                atvs = await pyatv.scan(loop, identifier=identifier, hosts=[ipaddress])
+                atvs = await pyatv.scan(loop, identifier=identifier, hosts=[ipaddress], timeout=15)
             else:
                 self.plugin.logger.info(f"Scanning for device using Multicast.")
-                atvs = await pyatv.scan(loop, identifier=identifier)
+                atvs = await pyatv.scan(loop, identifier=identifier, timeout=20)
             if not atvs:
-                self.plugin.logger.info("Failed appleTV connection as this specific Device cannot be found.  Please check its network connection.")
+                self.plugin.logger.info(f"Failed multicast connection as this specific {self.devicename} cannot be found.  Please check its network connection.")
                 return
+
             config = atvs[0]
             self.plugin.logger.debug(f"AppleTV:\n {config}") #{config.services[0].pairing}")
-            if self.isAppleTV:
-                for service in config.services:
+            self.isAppleTV = False
+            for service in config.services:
+                if service.pairing == PairingRequirement.NotNeeded or service.pairing == PairingRequirement.Disabled or service.pairing == PairingRequirement.Unsupported:
+                    self.plugin.logger.debug(f"\nService Protocol SKIPPED: {service.protocol}\nServicePort:{service.port}\nServiceEnabled:{service.enabled}\nServiceProperties:{service.properties}\nServicePairing:{service.pairing}\nServiceIdent:{service.identifier}")
+                    continue
+                else:
                     self.plugin.logger.debug(f"\nService Protocol: {service.protocol}\nServicePort:{service.port}\nServiceEnabled:{service.enabled}\nServiceProperties:{service.properties}\nServicePairing:{service.pairing}\nServiceIdent:{service.identifier}")
                     if service.enabled:
                         config.set_credentials(service.protocol, airplay_credentials)
                         self.plugin.logger.debug(f"Set Credentials {airplay_credentials} for service {service.protocol}")
+                        self.isAppleTV = True   ## if credentials == then become appleTV - not correct Samsung TV...
                     else:
-                        self.plugin.logger.info(f"{service.protocol} is disabled on this device.  This may impact functionality")
                         if service.protocol == pyatv.Protocol.MRP:
                             self.plugin.logger.info(f"{self.devicename} has MRP Protocol disabled on this device.  This will impact PowerState reporting.")
-            else:
-                self.plugin.logger.debug(f"Not setting credentials as airplay only device..")
+                        else:
+                            self.plugin.logger.info(f"{self.devicename} has Protocol: {service.protocol} disabled.  This may impact functionality")
+
             self.plugin.logger.debug(f"Connecting to {config.address}")
             return await pyatv.connect(config, loop)
         except:
@@ -575,10 +588,13 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                     device.updateStateOnServer(key="status", value="Paired. Push Updating.")
                     # Update app list
                     self.plugin.logger.debug("Updating app list")
-                    self.plugin.logger.info(f"{device.name} successfully connected and real-time Push updating enabled.")
+                    self.plugin.logger.info(f"{device.name} successfully connected and real-time Push updating enabled. (if available!)")
                     timeretry = 10
                     if self.isAppleTV:
-                        await self._update_app_list()
+                        try:
+                            await self._update_app_list()
+                        except pyatv.exceptions.NotSupportedError:
+                            pass
                     while True:
                         await asyncio.sleep(20)
                         self.plugin.logger.debug(f"Within main sleep 20 second loop killconnection {self._killConnection}")
@@ -747,9 +763,8 @@ class Plugin(indigo.PluginBase):
             device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
             identifier = device.states["identifier"]
             credentials = device.ownerProps.get("credentials","")
-
-            if credentials != "":
-                self.logger.info(f"{device.name} Pairing Credentials exist, attempting to connect.")
+            if credentials != "" :
+                self.logger.info(f"{device.name} Device has been Setup, attempting to connect.")
                 new_data = {}
                 if credentials == "":  ## future use.
                     thisisappleTV = False
@@ -757,8 +772,11 @@ class Plugin(indigo.PluginBase):
                     thisisappleTV = True
                 new_data["credentials"] = credentials
                 new_data["identifier"] = identifier
-                self.appleTVManagers.append( appleTVListener(self, self._event_loop, new_data, device.id, thisisappleTV, device.name ))
-
+                self.appleTVManagers.append( appleTVListener(self, self._event_loop, new_data, device.id, thisisappleTV, False, device.name ))
+            else:
+                self.logger.info(f"{device.name} has not been setup in Device Edit.  Suggest setup connection or delete device.")
+                device.updateStateOnServer(key="status", value="Awaiting Setup")
+                device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
         else:
             device.updateStateOnServer(key="status", value="Starting Up")
             device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
@@ -769,9 +787,14 @@ class Plugin(indigo.PluginBase):
        # self.logger.debug(f"valueDict {valuesDict}\n, type_id {type_id}, and dev_id {dev_id}")
         self._appleTVpairing  = None
         device = indigo.devices[dev_id]
+        devicename = device.name
         identifier = device.states['identifier']
+        ipaddress = device.states['ip']
+        if self.validate_ip_address(ipaddress):
         # get all atvs
-        self._event_loop.create_task(self.return_MatchedappleTVs(identifier))
+            self._event_loop.create_task(self.return_MatchedappleTVs(identifier, devicename, ipaddress))
+        else:
+            self._event_loop.create_task(self.return_MatchedappleTVs(identifier, devicename, "UNKNOWN"))
         self.logger.info("Scanning for all AppleTVs")
 
     async def two_pairing(self, identifier, pincode):
@@ -796,9 +819,27 @@ class Plugin(indigo.PluginBase):
             self.logger.exception("Two Pairing Exception")
             return
 
-    async def one_pairing(self, atv):
+    async def one_pairing(self, atv, devicename):
         try:
-            self.logger.debug(f"First Step One Pairing Started {atv.identifier}")
+            self.logger.debug(f"First Step One Pairing Started {atv.identifier} & Indigo Device {devicename}")
+            service = atv.get_service(pyatv.Protocol.AirPlay)
+            self.logger.debug(f"Service: {service}")
+            if service.pairing == PairingRequirement.Unsupported:
+                self.logger.debug(f"{pyatv.Protocol.AirPlay} does not support pairing")
+                self._paired_credentials = "Pairing is Unsupported"
+                self.logger.info(f"{devicename} does not need Pairing.  I will attempt to Connect.  Press Save to continue.")
+                return "Pairing is Unsupported"
+            elif service.pairing == PairingRequirement.Disabled:
+                self.logger.debug(f"{pyatv.Protocol.AirPlay} does not support pairing. Disabled.")
+
+                self.logger.info(f"{devicename} does not need Pairing.  Attempt to Connect.  Press Save to continue.")
+                self._paired_credentials = "Pairing is Disabled"
+                return "Pairing is Disabled"
+            elif service.pairing == PairingRequirement.NotNeeded:
+                self.logger.debug(f"{pyatv.Protocol.AirPlay} does not support pairing. Not Needed.")
+                self.logger.info(f"{devicename} does not need Pairing.  Attempt to Connect.  Press Save to continue.")
+                self._paired_credentials = "Pairing is Not Needed"
+                return "Pairing is Not Needed"
             self._paired_credentials = None
             self._appleTVpairing = await pyatv.pair( atv, loop=self._event_loop, protocol=pyatv.Protocol.AirPlay)
             await self._appleTVpairing.begin()
@@ -807,7 +848,6 @@ class Plugin(indigo.PluginBase):
                 self.logger.info("This appleTV needs a Pincode.  Please enter and press Submit.")
         except:
             self.logger.exception("OnePairing")
-
 
     def submitCode(self, valuesDict, type_id="", dev_id=None):
         self.logger.debug(u'submit PINCode Button pressed Called.')
@@ -1186,7 +1226,7 @@ class Plugin(indigo.PluginBase):
 
     async def _async_start(self):
         self.logger.debug("_async_start")
-        self.logger.info("Starting event loop and setting up any paired connections")
+        self.logger.debug("Starting event loop and setting up any connections")
         # add things you need to do at the start of the plugin here
 
     def sendLaunchApp(self, valuesDict, typeId):
@@ -1278,6 +1318,7 @@ class Plugin(indigo.PluginBase):
             device = indigo.devices[deviceid]
             atv_appId = ""
             atv_app = None
+            powerstate = False
             if isAppleTV:
                 atv_app = atv.metadata.app
             if atv_app !=None:
@@ -1370,9 +1411,12 @@ class Plugin(indigo.PluginBase):
                     self._event_loop.create_task(self.no_pairing_needed(atv))
                     return
 
-    async def return_MatchedappleTVs(self, identifier):
+    async def return_MatchedappleTVs(self, identifier, devicename, ipaddress):
         self.logger.debug("Returning all ATVS")
-        atvs = await pyatv.scan(self._event_loop, timeout=10)
+        if ipaddress !="UNKNOWN":
+            atvs = await pyatv.scan(self._event_loop, hosts=[ipaddress],timeout=15)
+        else:
+            atvs = await pyatv.scan(self._event_loop, timeout=15)
         if not atvs:
             self.logger.info("This deivce was not found.  Try power cycling and try again.")
             return None
@@ -1382,7 +1426,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.debug(f"Device Identifer: {identifier}  && appleTV {atv.identifier}")
                 if identifier == str(atv.identifier):
                     self.logger.debug(f"Found Matching Device {atv.identifier}, start Pairing.")
-                    self._event_loop.create_task(self.one_pairing(atv))
+                    self._event_loop.create_task(self.one_pairing(atv, devicename))
                     return
     ########################################
     # Relay / Dimmer Action callback
