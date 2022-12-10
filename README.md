@@ -148,49 +148,61 @@ See here for more related to pyatv library
 
 # Changelog
 
-## 0.1.1- 0.1.9 Extends Homepod support
-0.1.9
+## 0.1.1- 0.1.9 Add & Extend Homepod support
+### 0.1.9
+
 Add Action Group to Send Text to Speech annoucement to HomePods with current OSX System voice
 (Change current voice in OSX settings voices)
+
 Allows Device and Variable subsitution so can read weather forcast etc. depending on setup
-NEEDS ffmpeg (included in plugin), likely need quaranatine command run on new install
+
+NEEDS ffmpeg (included in plugin), likely to need quaranatine command run on new install
 Add messaging for this.
 Converts text to speech with system say command and then converts to mp3 for playback. Add a slight delay but seems to be under a second in my testing.
 
+
 ![https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/SpeakAnnoucement.png?raw=true](https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/SpeakAnnoucement.png?raw=true)
 
-0.1.1
+### 0.1.1
+
 Add support for Homepod and potentially other devices...
 
 Notes for HomePods
+
 These devices do not need to be paired - but once created setup the connect in the Device Edit screen
+
 Play_URL for Homepod reports unsupported.
+
 However Stream_File, or the Remote setting:
+
 "Stream local file or remote file to device"
-Works!
+
+Works
+
 Optional Argumment:
 https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3
+
 or
 Local file: (like)
 /Users/Indigo/Desktop/doorbell-1.mp3
 Works.
 
-To generate sound file:
+To generate voice file:
 In terminal
 `say "Person arrived Home" -o personhome.aiff`
 
-
 Needs mp3 files
 ffmpeg commandline tool can convert say generated aiff
+
 `ffmpeg -i Input.aiff -f mp3 -acodec libmp3lame -ab 192000 -ar 44100 Output.mp3`
 
-Tempted to add a Action Group to automate all this.. 
-if use ffmpeg will need to unquarantine binaries on install like the HomeKit plugin.
-Will see if can convert with simplier library given this is a simple job.
+Tempted to add a Action Group to automate all this.. (done in 0.1.9 above)
 
 Homepod:
 Appears Pause/Play toggle button unsupported.
+
 But volume control and seperate play, and Pause button function fine.
+
 The above Stream file means can use TTS and play your own mp3 files as annoucement action Groups
 
 
