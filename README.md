@@ -66,13 +66,16 @@ Open a device, with the Edit Device Details
 You should see the above.
 
 Since OS16 and Apple4k you will need to pair your indigoplugin Device with your appleTV
+Some devices do not need to be paired (such as Homepods) - the button below will setup them up for use
 
 #### Steps:
-Press the Start Pairing Button.
+Press the Start Connection Button.
 
-The plugin should find and connect to your appleTV.
+The plugin should find and connect to your appleTV device, or Homepod.
 
-A pincode should be displayed on the screen.
+If a pincode is needed the log will let you know.  If not needed when prompted press SAVE and close the dialog.
+
+Otherwise on the appleTV device - A pincode should be displayed on the screen.
 
 Enter the Pincode in the box, and press submit Pincode (Press) Button.
 
