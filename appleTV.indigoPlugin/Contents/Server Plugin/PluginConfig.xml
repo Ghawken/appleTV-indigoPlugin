@@ -131,4 +131,10 @@ If you cannot connect to your device, try power cycling it first, or allocate it
             <Option value="50">Critical Errors Only</Option>
         </List>
     </Field>
+     <Field id="previousVersion"
+           type="textfield"
+           defaultValue="0.0.1" hidden="true">
+        <Label></Label>
+    </Field>
+
 </PluginConfig>

@@ -11,7 +11,7 @@ import threading
 import traceback
 import inspect
 import asyncio
-
+from packaging import version
 import ipaddress
 
 from queue import Queue
@@ -48,6 +48,7 @@ except:
     # error in init when can message
     pass
 
+import subprocess
 import sys
 import os
 from os import path
@@ -639,14 +640,14 @@ class Plugin(indigo.PluginBase):
             self.fileloglevel = logging.DEBUG
 
         self.logger.removeHandler(self.indigo_log_handler)
-
+        self.previousVersion = self.pluginPrefs.get("previousVersion", "0.0.1")
         self.indigo_log_handler = IndigoLogHandler(pluginDisplayName, logging.INFO)
         ifmt = logging.Formatter("%(message)s")
         self.indigo_log_handler.setFormatter(ifmt)
         self.indigo_log_handler.setLevel(self.logLevel)
         self.logger.addHandler(self.indigo_log_handler)
         self.forceAllDiscovery = False
-
+        self.pathtoPlugin = os.getcwd()
         try:
             import pyatv
         except ImportError:
@@ -707,7 +708,15 @@ class Plugin(indigo.PluginBase):
         self.saveDirectory = MAChome + "Documents/Indigo-appleTV/"
 
         self.logger.info(u"{0:=^130}".format(" End Initializing New Plugin  "))
-
+        try:
+            if version.parse(pluginVersion) != version.parse(self.previousVersion):
+                self.logger.info("Plugin Updated Version Detected.  Please run xattr command as below (copy & paste to terminal)")
+                self.logger.info("This enables Say Annoucements on HomePods.  If unused, then will not affect other functioning.")
+                self.logger.info("{}".format("sudo xattr -rd com.apple.quarantine '" + indigo.server.getInstallFolderPath() + "/" + "Plugins'"))
+                self.logger.info(u"{0:=^130}".format(" End of Setup "))
+                self.pluginPrefs['previousVersion']= pluginVersion
+        except:
+            pass
 
 
     def closedPrefsConfigUi(self, valuesDict, userCancelled):
@@ -1019,11 +1028,20 @@ class Plugin(indigo.PluginBase):
         MAChome = os.path.expanduser("~") + "/"
         self.saveDirectory = MAChome + "Pictures/Indigo-appleTV/"
 
+        self.speakPath = os.path.join(self.pluginprefDirectory, "speak")
+
         try:
+
+            if not os.path.exists(self.pluginprefDirectory):
+                os.makedirs(self.pluginprefDirectory)
             if not os.path.exists(self.saveDirectory):
                 os.makedirs(self.saveDirectory)
+            speakpath = os.path.join(self.pluginprefDirectory, "speak")
+            if not os.path.exists(self.speakPath):
+                os.makedirs(self.speakPath)
+
         except:
-            self.logger.error(u'Error Accessing Save Directory. ')
+            self.logger.error(u'Error Accessing Save and Peak Directory. ')
             pass
 
 
@@ -1251,7 +1269,6 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(f"sendRemoteCommand Called {valuesDict} & {typeId}")
         props = valuesDict.props
         self.logger.debug(f"Props equal: {props}")
-
         if props["appleTV"] =="" or props["appleTV"]=="":
             self.logger.info("No AppleTV selected.")
             return
@@ -1262,6 +1279,7 @@ class Plugin(indigo.PluginBase):
 
         if args != "":
             command = f"{command}={args}"
+
 
         self.logger.info(f"Sending Command {command} to appleTV Device ID {appleTVid}")
         foundDevice = False
@@ -1307,6 +1325,69 @@ class Plugin(indigo.PluginBase):
 
         if foundDevice == False:
             self.logger.info("No artwork saved.  The appleTV appears to have not been found.")
+
+
+
+    def speakText(self, valuesDict, typeId):
+        self.logger.debug(f"speakText Called {valuesDict} & {typeId}")
+        props = valuesDict.props
+        self.logger.debug(f"Props equal: {props}")
+        if props["appleTV"] =="" or props["appleTV"]=="":
+            self.logger.info("No AppleTV selected.")
+            return
+        texttospeak = self.substitute(props.get("texttospeak",""))
+        # allow variable device substitution
+        appleTVid = props["appleTV"]
+        self.logger.info(f"Speaking Text: {texttospeak} to appleTV Device ID {appleTVid}")
+        foundDevice = False
+        ffmpegpath = self.pathtoPlugin + '/ffmpeg/ffmpeg'
+        #ffmpeg - i        Input.aiff - f        mp3 - acodec        libmp3lame - ab        192000 - ar        44100        Output.mp3
+
+        try:
+            p2 = subprocess.Popen(["say",str(texttospeak), "-o",self.speakPath+"/"+str(appleTVid)+".aiff" ])
+            output, err = p2.communicate()
+            self.logger.debug(str(texttospeak))
+            self.logger.debug('say return code:' + str(p2.returncode) + ' output:' + str(
+                output) + ' error:' + str(err))
+        except Exception as e:
+            self.logger.exception(u'Caught Exception within ffmpeg conversion')
+        ffmpegpath = "./ffmpeg/ffmpeg"
+        outputfile = self.speakPath+"/"+str(appleTVid)
+        try:
+            argstopass = '"' + ffmpegpath + '"' +' -y'+ ' -i "' +outputfile+".aiff" + '" -f mp3 "' + str(outputfile)+".mp3" + '"'
+            self.logger.debug(argstopass)
+            p1 = subprocess.Popen([argstopass], shell=True)
+            outs, errs = p1.communicate(timeout=5)
+           # self.logger.debug(str(argstopass))
+            self.logger.debug('ffmpeg return code:' + str(p1.returncode) + ' output:' + str(
+                outs) + ' error:' + str(errs))
+
+        except subprocess.TimeoutExpired as e:
+            p1.kill()
+            outs, errs = p1.communicate()
+            self.logger.info("{}".format(outs))
+            self.logger.warning("{}".format(errs))
+        except Exception as e:
+            self.logger.exception(u'Caught Exception within ffmpeg conversion')
+
+        self.logger.debug("{}".format(outs))
+        self.logger.debug("{}".format(errs))
+
+        command = "stream_file"
+        args = str(outputfile)+".mp3"
+
+        command = f"{command}={args}"
+
+        self.logger.debug(f"Sending Command {command} to appleTV Device ID {appleTVid}")
+        for appletvManager in self.appleTVManagers:
+            if int(appletvManager.device_ID) == int(appleTVid):
+                foundDevice = True
+                self.logger.debug(f"Found correct AppleTV listener/manager. {appletvManager} and id {appletvManager.device_ID}")
+
+                appletvManager.send_command(command,args )
+
+        if foundDevice == False:
+            self.logger.info("No Annoucement made.  The appleTV appears to have not been found.")
 
     async def process_playstatus(self, playstatus,  atv, time_start,deviceid, isAppleTV):
         try:

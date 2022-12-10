@@ -148,6 +148,17 @@ See here for more related to pyatv library
 
 # Changelog
 
+## 0.1.1- 0.1.9 Extends Homepod support
+0.1.9
+Add Action Group to Send Text to Speech annoucement to HomePods with current OSX System voice
+(Change current voice in OSX settings voices)
+Allows Device and Variable subsitution so can read weather forcast etc. depending on setup
+NEEDS ffmpeg (included in plugin), likely need quaranatine command run on new install
+Add messaging for this.
+Converts text to speech with system say command and then converts to mp3 for playback. Add a slight delay but seems to be under a second in my testing.
+
+![https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/SpeakAnnoucement.png?raw=true](https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/SpeakAnnoucement.png?raw=true)
+
 0.1.1
 Add support for Homepod and potentially other devices...
 
@@ -173,13 +184,16 @@ Needs mp3 files
 ffmpeg commandline tool can convert say generated aiff
 `ffmpeg -i Input.aiff -f mp3 -acodec libmp3lame -ab 192000 -ar 44100 Output.mp3`
 
-Tempted to add a Action Group to automate all this.. if use ffmpeg will need to unquarantine binaries like HomeKit plugin.
+Tempted to add a Action Group to automate all this.. 
+if use ffmpeg will need to unquarantine binaries on install like the HomeKit plugin.
 Will see if can convert with simplier library given this is a simple job.
 
 Homepod:
 Appears Pause/Play toggle button unsupported.
 But volume control and seperate play, and Pause button function fine.
 The above Stream file means can use TTS and play your own mp3 files as annoucement action Groups
+
+
 
 
 

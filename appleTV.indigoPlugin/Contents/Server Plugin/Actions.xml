@@ -64,7 +64,32 @@
 			</Field>
         </ConfigUI>
     </Action>
+       <Action id="speakAnnoucement">
+        <Name>Speak Annoucement</Name>
+        <CallbackMethod>speakText</CallbackMethod>
+        <ConfigUI>
+			<Field id="appleTV" type="menu" defaultValue="0" dynamicReload="true" tooltip="select appleTV ">
+				<List class="indigo.devices" filter="self.appleTV"/>
+				<Label>Select Apple Tv:</Label>
+				<CallbackMethod>menu_callback</CallbackMethod>
+			</Field>
+            <Field id="texttospeak" type="textfield" defaultValue="">
+                <Label>Announce:</Label>
+            </Field>
+                <Field id="infoLabela100" type="label" fontSize='large' fontColor="blue">
+        <Field id="sep7ac" type="separator"/>
+        <Label>
+Indigo Device, State and Variable Substitutions allowed
+%%v:VARID%%
+VARID is the unique variable ID as found in the UI in various places.
+%%d:DEVID:STATEID%%
+The STATEID of the device whose ID is DEVID will be substituted.
+eg %%d:123456:album%%.
+		</Label>
+    </Field>
 
+        </ConfigUI>
+    </Action>
            <Action id="saveArtwork">
         <Name>Save current Artwork</Name>
         <CallbackMethod>saveArtwork</CallbackMethod>
