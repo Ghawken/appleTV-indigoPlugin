@@ -148,6 +148,45 @@ See here for more related to pyatv library
 
 # Changelog
 
+0.1.1
+Add support for Homepod and potentially other devices...
+
+Notes for HomePods
+These devices do not need to be paired - but once created setup the connect in the Device Edit screen
+Play_URL for Homepod reports unsupported.
+However Stream_File, or the Remote setting:
+"Stream local file or remote file to device"
+Works!
+Optional Argumment:
+https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3
+or
+Local file: (like)
+/Users/Indigo/Desktop/doorbell-1.mp3
+Works.
+
+To generate sound file:
+In terminal
+`say "Person arrived Home" -o personhome.aiff`
+
+
+Needs mp3 files
+ffmpeg commandline tool can convert say generated aiff
+`ffmpeg -i Input.aiff -f mp3 -acodec libmp3lame -ab 192000 -ar 44100 Output.mp3`
+
+Tempted to add a Action Group to automate all this.. if use ffmpeg will need to unquarantine binaries like HomeKit plugin.
+Will see if can convert with simplier library given this is a simple job.
+
+Homepod:
+Appears Pause/Play toggle button unsupported.
+But volume control and seperate play, and Pause button function fine.
+The above Stream file means can use TTS and play your own mp3 files as annoucement action Groups
+
+
+
+
+Previously:
+
+
 Additional Remote control states - allow arguments to be sent.
 Enabling set volume, double tap, hold, play_URL etc.
 MenuItem: Add Logging info to show all Commands possible (not available!)
