@@ -1632,7 +1632,14 @@ class Plugin(indigo.PluginBase):
         for dev in indigo.devices.iter("self"):
             if "identifier" not in dev.states: continue
             if str(dev.states["identifier"]) == str(identifier):
-                self.logger.debug(f"Found exisiting device same Identifier. Skipping: {dev.name}")
+                self.logger.debug(f"Found exisiting device same Identifier. Skipping: {dev.name},but now checking IP address")
+                oldip = dev.states["ip"]
+                if str(oldip) != str(ip):
+                    self.logger.info(f"Found existing device with a different IP Address, updating this IP Address")
+                    dev.updateStateOnServer(key="ip", value=str(ip))
+                    localPropsCopy = dev.ownerProps
+                    localPropsCopy["IP"] = str(ip)
+                    dev.replacePluginPropsOnServer(localPropsCopy)
                 return
 
         if model !=  pyatv.const.DeviceModel.Unknown or forceDiscovery:
