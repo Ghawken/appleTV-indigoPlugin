@@ -527,7 +527,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                 self.plugin.logger.info(f"Scanning for device using Multicast.")
                 atvs = await pyatv.scan(loop, identifier=identifier, timeout=20)
             if not atvs:
-                self.plugin.logger.info(f"Failed multicast connection as this specific {self.devicename} cannot be found.  Please check its network connection.")
+                self.plugin.logger.info(f"Failed connection as this specific {self.devicename} cannot be found.  Please check its network connection.")
                 return
 
             config = atvs[0]
@@ -550,7 +550,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                             self.plugin.logger.info(f"{self.devicename} has Protocol: {service.protocol} disabled.  This may impact functionality")
 
             self.plugin.logger.debug(f"Connecting to {config.address}")
-            return await pyatv.connect(config, loop)
+            return (await pyatv.connect(config, loop), config.address)
         except:
             self.plugin.logger.exception("Connect ATV Exception")
 
@@ -575,18 +575,28 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                 identifier = atv_config["identifier"]
                 airplay_credentials = atv_config["credentials"]
                 if self.validate_ip_address(ipaddress) and self.cast == "unicast":  ## startup
-                    self.atv = await self.connect_atv(loop, identifier, airplay_credentials, ipaddress, self.cast)
+                    (self.atv, newipaddress) = await self.connect_atv(loop, identifier, airplay_credentials, ipaddress, self.cast)
                 else:  ## if anything other than unicast or invalid IP use multicast
-                    self.atv = await self.connect_atv(loop, identifier, airplay_credentials, "", self.cast)
+                    (self.atv, newipaddress) = await self.connect_atv(loop, identifier, airplay_credentials, "", self.cast)
                 if self.atv:
                     self.atv.listener = self
                     self.atv.push_updater.listener = self
                     self.atv.push_updater.start()
                     self.atv.power.listener =self
-
                     self.plugin.logger.debug("Push updater started")
                     device = indigo.devices[deviceid]
                     device.updateStateOnServer(key="status", value="Paired. Push Updating.")
+                    self.plugin.logger.debug(f"New IP ADDRESS: {newipaddress}")
+                    #localPropsCopy = device.ownerProps
+                    #localPropsCopy["IP"] = "this is my IP:"+str(newipaddress)
+                    #device.replacePluginPropsOnServer(localPropsCopy)
+                    if str(ipaddress) != str(newipaddress):
+                        if self.validate_ip_address(newipaddress):
+                            device.updateStateOnServer(key="ip", value=str(newipaddress))
+                            localPropsCopy = device.ownerProps
+                            localPropsCopy["IP"] = str(newipaddress)
+                            device.replacePluginPropsOnServer(localPropsCopy)
+                            self.plugin.logger.info(f"AppleTV IP Address has changed, updating Indigo Device.  Using new IP {newipaddress}")
                     # Update app list
                     self.plugin.logger.debug("Updating app list")
                     self.plugin.logger.info(f"{device.name} successfully connected and real-time Push updating enabled. (if available!)")
@@ -1627,14 +1637,14 @@ class Plugin(indigo.PluginBase):
 
         if model !=  pyatv.const.DeviceModel.Unknown or forceDiscovery:
             devProps = {}
-            devProps[u"isAppleTV"] = True
-            devProps[u"SupportsOnState"] = False
-            devProps[u"SupportsSensorValue"] = False
-            devProps[u"SupportsStatusRequest"] = False
-            devProps[u"AllowOnStateChange"] = False
-            devProps[u"AllowSensorValueChange"] = False
-            devProps[u"IP"] = str(ip)
-            devProps[u"MAC"] = str(mac)
+            devProps["isAppleTV"] = True
+            devProps["SupportsOnState"] = False
+            devProps["SupportsSensorValue"] = False
+            devProps["SupportsStatusRequest"] = False
+            devProps["AllowOnStateChange"] = False
+            devProps["AllowSensorValueChange"] = False
+            devProps["IP"] = str(ip)
+            devProps["MAC"] = str(mac)
             devProps["Name"] = str(name)
             devProps["Model"] = str(model)
             devProps["Identifier"] = str(identifier)
