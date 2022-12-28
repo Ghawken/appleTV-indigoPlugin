@@ -528,7 +528,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                 atvs = await pyatv.scan(loop, identifier=identifier, timeout=20)
             if not atvs:
                 self.plugin.logger.info(f"Failed connection as this specific {self.devicename} cannot be found.  Please check its network connection.")
-                return
+                return (False,"")
 
             config = atvs[0]
             self.plugin.logger.debug(f"AppleTV:\n {config}") #{config.services[0].pairing}")
@@ -553,6 +553,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             return (await pyatv.connect(config, loop), config.address)
         except:
             self.plugin.logger.exception("Connect ATV Exception")
+            return (False, "")
 
     def validate_ip_address(self, address):
         try:
