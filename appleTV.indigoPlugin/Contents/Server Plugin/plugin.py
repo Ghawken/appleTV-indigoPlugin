@@ -1430,8 +1430,13 @@ class Plugin(indigo.PluginBase):
                 playingState = "Idle"
             if state == pyatv.const.DeviceState.Playing:
                 playingState = "Playing"
-            if state in (pyatv.const.DeviceState.Paused, pyatv.const.DeviceState.Seeking, pyatv.const.DeviceState.Stopped):
+            elif state == pyatv.const.DeviceState.Paused:
                 playingState = "Paused"
+            elif state == pyatv.const.DeviceState.Seeking:#, pyatv.const.DeviceState.Stopped):
+                playingState = "Seeking"
+            elif state ==pyatv.const.DeviceState.Stopped:
+                playingState = "Stopped"
+
             stateList = [
                 {'key': 'currentlyPlaying_AppId', 'value': f"{atv_appId}"},
                 {'key': 'currentlyPlaying_App', 'value': f"{atv_app}"},
