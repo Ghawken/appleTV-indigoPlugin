@@ -1411,8 +1411,8 @@ class Plugin(indigo.PluginBase):
             atv_appId = ""
             atv_app = None
             powerstate = False
-            if isAppleTV:
-                atv_app = atv.metadata.app
+            if isAppleTV and atv.metadata.app !=None:
+                atv_app = atv.metadata.app.name
             if atv_app !=None:
                 atv_appId = atv.metadata.app.identifier
             self.logger.debug(f"App Playing {atv_appId} and App Name {atv_app}")
