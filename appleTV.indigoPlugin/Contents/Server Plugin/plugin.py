@@ -1413,7 +1413,7 @@ class Plugin(indigo.PluginBase):
             atv_appId = ""
             atv_app = None
             powerstate = False
-            powerstate_sting = "Unknown"
+            powerstate_string = "Unknown"
             if isAppleTV and atv.metadata.app !=None:
                 atv_app = atv.metadata.app.name
             if atv_app !=None:
