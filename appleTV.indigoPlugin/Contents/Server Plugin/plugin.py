@@ -269,9 +269,11 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             device = indigo.devices[self.deviceid]
             if new_state == pyatv.const.PowerState.On:
                 device.updateStateOnServer("onOffState", True)
+                device.updateStateOnServer("PowerState","On")
                 device.updateStateImageOnServer(indigo.kStateImageSel.PowerOn)
             elif new_state == pyatv.const.PowerState.Off:
                 device.updateStateOnServer("onOffState", False)
+                device.updateStateOnServer("PowerState", "Idle")
                 device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
         except:
             self.plugin.logger.debug("Exception in Powerstate Updatee",exc_info=True)
@@ -1411,6 +1413,7 @@ class Plugin(indigo.PluginBase):
             atv_appId = ""
             atv_app = None
             powerstate = False
+            powerstate_sting = "Unknown"
             if isAppleTV and atv.metadata.app !=None:
                 atv_app = atv.metadata.app.name
             if atv_app !=None:
@@ -1423,8 +1426,10 @@ class Plugin(indigo.PluginBase):
                 if atv.power.power_state == pyatv.const.PowerState.Off:
                     playingState = "Standby"
                     powerstate = False
+                    powerstate_string = "Idle"
                 elif atv.power.power_state == pyatv.const.PowerState.On:
                     powerstate = True
+                    powerstate_string = "On"
             state = playstatus.device_state
             if state in (pyatv.const.DeviceState.Idle, pyatv.const.DeviceState.Loading):
                 playingState = "Idle"
@@ -1451,6 +1456,7 @@ class Plugin(indigo.PluginBase):
                 {'key': 'currentlyPlaying_Title', 'value': f"{playstatus.title}"},
                 {'key': 'currentlyPlaying_TotalTime', 'value': f"{playstatus.total_time}"},
                 {'key': 'currentlyPlaying_PlayState', 'value': f"{playingState}"},
+                {'key': 'PowerState', 'value': powerstate_string},
                 {'key': 'onOffState', 'value': powerstate},
             ]
             device.updateStatesOnServer(stateList)
