@@ -1405,10 +1405,14 @@ class Plugin(indigo.PluginBase):
     async def process_playstatus(self, playstatus,  atv, time_start,deviceid, isAppleTV):
         try:
             #self.logger.debug(f"Process PlayStatus Called {playstatus}, {atv}, {atv.metadata} {time_start} and IndigoDeviceID {deviceid} ")
-            self.logger.debug(f"PlayState DEVICE_state {playstatus.device_state}")
+            #self.logger.debug(f"PlayState DEVICE_state {playstatus.device_state}")
             #self.logger.debug(f"PlayState TITLE {playstatus.title}, & Position {playstatus.position} & Artist {playstatus.artist}  & media_type {playstatus.media_type} ")
             #self.logger.debug(f"PlayState TOTAL TIME {playstatus.total_time} & Series Name {playstatus.series_name} && Season_Numer {playstatus.season_number}")
             #self.logger.debug(f"PlayState EpisodeNo {playstatus.episode_number} & Content Identifier {playstatus.content_identifier} ")
+
+            if playstatus !=None:
+                self.logger.debug(f"\n***** Play Status Debug ***** \nPlaystatus {playstatus}\nPlayState Title {playstatus.title}")
+
             device = indigo.devices[deviceid]
             atv_appId = ""
             atv_app = None
@@ -1430,17 +1434,18 @@ class Plugin(indigo.PluginBase):
                 elif atv.power.power_state == pyatv.const.PowerState.On:
                     powerstate = True
                     powerstate_string = "On"
-            state = playstatus.device_state
-            if state in (pyatv.const.DeviceState.Idle, pyatv.const.DeviceState.Loading):
-                playingState = "Idle"
-            if state == pyatv.const.DeviceState.Playing:
-                playingState = "Playing"
-            elif state == pyatv.const.DeviceState.Paused:
-                playingState = "Paused"
-            elif state == pyatv.const.DeviceState.Seeking:#, pyatv.const.DeviceState.Stopped):
-                playingState = "Seeking"
-            elif state ==pyatv.const.DeviceState.Stopped:
-                playingState = "Stopped"
+            if playstatus.device_state != None:
+                state = playstatus.device_state
+                if state in (pyatv.const.DeviceState.Idle, pyatv.const.DeviceState.Loading):
+                    playingState = "Idle"
+                if state == pyatv.const.DeviceState.Playing:
+                    playingState = "Playing"
+                elif state == pyatv.const.DeviceState.Paused:
+                    playingState = "Paused"
+                elif state == pyatv.const.DeviceState.Seeking:#, pyatv.const.DeviceState.Stopped):
+                    playingState = "Seeking"
+                elif state ==pyatv.const.DeviceState.Stopped:
+                    playingState = "Stopped"
 
             stateList = [
                 {'key': 'currentlyPlaying_AppId', 'value': f"{atv_appId}"},
