@@ -324,6 +324,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         """Call when play status was updated."""
         try:
             self.plugin.logger.debug(f"Playstatus Update Called for {self.devicename}")
+            self.plugin.logger.debug(f"& PlayStatus\n {playstatus}")
             try:
                 self.task.cancel()
             except:
@@ -340,6 +341,12 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             )
         except:
             self.plugin.logger.exception("playstatus update exception:")
+
+    def playstatus_error(self, updater, exception: Exception) -> None:
+        """Inform about an error when updating play status."""
+        self.plugin.logger.debug(f"Playstatus update error. Exception {exception} and {exception.__class__}")
+
+
 
     def start_app(self, appid):
         try:
@@ -1637,60 +1644,63 @@ class Plugin(indigo.PluginBase):
 
     def createNewDevice(self, atv, forceDiscovery):
 
-        ip = str(atv.address)
-        name = atv.name
-        operating_system = atv.device_info.operating_system
-        mac = atv.device_info.mac
-        model = atv.device_info.model
-        identifier = atv.identifier
+        try:
+            ip = str(atv.address)
+            name = atv.name
+            operating_system = atv.device_info.operating_system
+            mac = atv.device_info.mac
+            model = atv.device_info.model
+            identifier = atv.identifier
 
-        self.logger.debug(f"\n{ip}\n{name}\n{mac}\n{model}\n{operating_system}")
+            self.logger.debug(f"\n{ip}\n{name}\n{mac}\n{model}\n{operating_system}")
 
-        for dev in indigo.devices.iter("self"):
-            if "identifier" not in dev.states: continue
-            if str(dev.states["identifier"]) == str(identifier):
-                self.logger.debug(f"Found exisiting device same Identifier. Skipping: {dev.name},but now checking IP address")
-                oldip = dev.states["ip"]
-                if str(oldip) != str(ip):
-                    self.logger.info(f"Found existing device with a different IP Address, updating this IP Address")
-                    dev.updateStateOnServer(key="ip", value=str(ip))
-                    localPropsCopy = dev.ownerProps
-                    localPropsCopy["IP"] = str(ip)
-                    dev.replacePluginPropsOnServer(localPropsCopy)
-                return
+            for dev in indigo.devices.iter("self"):
+                if "identifier" not in dev.states: continue
+                if str(dev.states["identifier"]) == str(identifier):
+                    self.logger.debug(f"Found exisiting device same Identifier. Skipping: {dev.name},but now checking IP address")
+                    oldip = dev.states["ip"]
+                    if str(oldip) != str(ip):
+                        self.logger.info(f"Found existing device with a different IP Address, updating this IP Address")
+                        dev.updateStateOnServer(key="ip", value=str(ip))
+                        localPropsCopy = dev.ownerProps
+                        localPropsCopy["IP"] = str(ip)
+                        dev.replacePluginPropsOnServer(localPropsCopy)
+                    return
 
-        if model !=  pyatv.const.DeviceModel.Unknown or forceDiscovery:
-            devProps = {}
-            devProps["isAppleTV"] = True
-            devProps["SupportsOnState"] = False
-            devProps["SupportsSensorValue"] = False
-            devProps["SupportsStatusRequest"] = False
-            devProps["AllowOnStateChange"] = False
-            devProps["AllowSensorValueChange"] = False
-            devProps["IP"] = str(ip)
-            devProps["MAC"] = str(mac)
-            devProps["Name"] = str(name)
-            devProps["Model"] = str(model)
-            devProps["Identifier"] = str(identifier)
-            stateList = [
-                {'key': 'ip', 'value': ip},
-                {'key': 'MAC', 'value': str(mac)},
-                {'key': 'name', 'value': str(name)},
-                {'key': 'model', 'value': str(model)},
-                {'key': 'identifier', 'value': str(identifier)},
-            ]
-            self.logger.debug(f"Statelist \n {stateList}")
-            dev = indigo.device.create(
-                protocol=		indigo.kProtocol.Plugin,
-                address =		 ip,
-                name =			 "appleTV " + name,
-                description =	 name,
-                pluginId =		 self.pluginId,
-                deviceTypeId =	 "appleTV",
-                props =			 devProps)
+            if model !=  pyatv.const.DeviceModel.Unknown or forceDiscovery:
+                devProps = {}
+                devProps["isAppleTV"] = True
+                devProps["SupportsOnState"] = False
+                devProps["SupportsSensorValue"] = False
+                devProps["SupportsStatusRequest"] = False
+                devProps["AllowOnStateChange"] = False
+                devProps["AllowSensorValueChange"] = False
+                devProps["IP"] = str(ip)
+                devProps["MAC"] = str(mac)
+                devProps["Name"] = str(name)
+                devProps["Model"] = str(model)
+                devProps["Identifier"] = str(identifier)
+                stateList = [
+                    {'key': 'ip', 'value': ip},
+                    {'key': 'MAC', 'value': str(mac)},
+                    {'key': 'name', 'value': str(name)},
+                    {'key': 'model', 'value': str(model)},
+                    {'key': 'identifier', 'value': str(identifier)},
+                ]
+                self.logger.debug(f"Statelist \n {stateList}")
+                dev = indigo.device.create(
+                    protocol=		indigo.kProtocol.Plugin,
+                    address =		 ip,
+                    name =			 "appleTV " + name,
+                    description =	 name,
+                    pluginId =		 self.pluginId,
+                    deviceTypeId =	 "appleTV",
+                    props =			 devProps)
 
-            dev.updateStatesOnServer(stateList)
-            self.sleep(1)
-            self.logger.info(f"AppleTV Indigo plugin Device Created:  {dev.name}")
-
+                dev.updateStatesOnServer(stateList)
+                self.sleep(1)
+                self.logger.info(f"AppleTV Indigo plugin Device Created:  {dev.name}")
+        except:
+            self.logger.info("Exception caught in create newDevice")
+            self.logger.debug("Exception caught details", exc_info=True)
 
