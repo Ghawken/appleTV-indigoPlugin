@@ -622,6 +622,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                         if self._killConnection:
                             self.plugin.logger.debug("Manually raise ConnectionReset Error - Kill Current Connection")
                             raise ConnectionResetError("Connection lost.  Raising Exception to restart loop manually.")
+
                 else:
                     await asyncio.sleep(timeretry)
                     self.plugin.logger.debug(f"Attempting to Connect again...and self._killconnection {self._killConnection}")
@@ -639,6 +640,8 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             except ConnectionResetError:
                 self.plugin.logger.debug(f"Connection lost, ended or otherwise.  Hopefully restarting loop", exc_info=True)
                 self._killConnection = False
+                self._handle_disconnect()
+                return
             except Exception:
                 self.plugin.logger.debug("Exception in Loop_ATV:  Should restart.",exc_info=True)
     ################################################################################
@@ -1688,18 +1691,23 @@ class Plugin(indigo.PluginBase):
                     {'key': 'identifier', 'value': str(identifier)},
                 ]
                 self.logger.debug(f"Statelist \n {stateList}")
+
+                name_used = "appleTV " + name
+                if "HomePod" in str(model):
+                    name_used = "HomePod " +name
+
                 dev = indigo.device.create(
                     protocol=		indigo.kProtocol.Plugin,
                     address =		 ip,
-                    name =			 "appleTV " + name,
-                    description =	 name,
+                    name =			 name_used,
+                    description =	 name_used,
                     pluginId =		 self.pluginId,
                     deviceTypeId =	 "appleTV",
                     props =			 devProps)
 
                 dev.updateStatesOnServer(stateList)
                 self.sleep(1)
-                self.logger.info(f"AppleTV Indigo plugin Device Created:  {dev.name}")
+                self.logger.info(f"AppleTV/HomePod Indigo plugin Device Created:  {dev.name}")
         except:
             self.logger.info("Exception caught in create newDevice")
             self.logger.debug("Exception caught details", exc_info=True)

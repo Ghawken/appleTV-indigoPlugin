@@ -4,14 +4,13 @@
 		<Name>AppleTV Device</Name>
 		<UiDisplayStateId>status</UiDisplayStateId>
 		<ConfigUI>
-			<Field id="isAppleTV"		type="checkbox"		defaultValue="true" hidden="yes"> </Field>
+			<Field id="isAppleTV"		type="checkbox"		defaultValue="true" hidden="true"> </Field>
 				<Field id="SupportsOnState" type="checkbox" defaultValue="false" hidden ="true"></Field>
 				<Field id="SupportsSensorValue" type="checkbox" defaultValue="false" hidden ="true"></Field>
 				<Field id="SupportsStatusRequest" type="checkbox" defaultValue="false" hidden ="true"></Field>
 				<Field id="AllowOnStateChange" type="checkbox" defaultValue="false" hidden ="true"></Field>
-				<Field id="AllowSensorValueChange" type="checkbox" defaultValue="false" hidden="True"></Field>
-				<Field id="isPaired"		type="checkbox"		defaultValue="false" hidden="yes"> </Field>
-
+				<Field id="AllowSensorValueChange" type="checkbox" defaultValue="false" hidden="true"></Field>
+				<Field id="isPaired"		type="checkbox"		defaultValue="false" hidden="true"> </Field>
 			<Field id="simpleSeparator3" type="separator"/>
 
 			<Field	  id="label3"			  type="label" >
@@ -37,7 +36,7 @@
 			<Field id="verficationcode"
 				   type="textfield"
 				   tooltip="Enter your AppleTV  PinCode"
-				   default=""   >
+				   defaultValue=""   >
 				<Label>PinCode:</Label>
 			</Field>
 
