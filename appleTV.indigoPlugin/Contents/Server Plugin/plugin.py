@@ -1014,8 +1014,9 @@ class Plugin(indigo.PluginBase):
         except:
             self.logger.exception("Error validate Config")
             return (True, values_dict)
+
     def runConcurrentThread(self):
-        # Periodically check to see that the subscription hasn't expired and that the reflector is still working.
+
         try:
             self.sleep(1)
             self.sleep(5)
@@ -1030,14 +1031,9 @@ class Plugin(indigo.PluginBase):
             self.logger.info("Completing full Shutdown ...")
 
         except:
-            self.logger.debug("Exception in runConcurrentThread", exc_info=True)
-            ## stop the homekit driver
+            self.logger.exception("Exception in runConcurrentThread", exc_info=True)
             self.sleep(2)
-            ## update all devices and start Bridge again.
-            self.driver_multiple = []
-            self.bridge_multiple = []
-            self.driverthread_multiple = []
-            self.update_deviceList()
+
 
     def startup(self):
         self.debugLog(u"Starting Plugin. startup() method called.")
