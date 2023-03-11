@@ -52,7 +52,7 @@ import subprocess
 import sys
 import os
 from os import path
-
+import requirements
 
 # import applescript
 import xml.dom.minidom
@@ -662,6 +662,7 @@ class Plugin(indigo.PluginBase):
             self.logLevel = logging.INFO
             self.fileloglevel = logging.DEBUG
 
+        self.do_not_start_devices = False
         self.logger.removeHandler(self.indigo_log_handler)
         self.previousVersion = self.pluginPrefs.get("previousVersion", "0.0.1")
         self.indigo_log_handler = IndigoLogHandler(pluginDisplayName, logging.INFO)
@@ -788,6 +789,10 @@ class Plugin(indigo.PluginBase):
 
     def deviceStartComm(self, device):
         self.logger.debug(f"{device.name}: Starting {device.deviceTypeId} Device {device.id} ")
+
+        if self.do_not_start_devices:  # This is set on if Package requirements listed in requirements.txt are not met
+            return
+
         device.stateListOrDisplayStateIdChanged()
 
         if device.enabled:
@@ -1038,6 +1043,15 @@ class Plugin(indigo.PluginBase):
     def startup(self):
         self.debugLog(u"Starting Plugin. startup() method called.")
         self.logger.debug("Checking Plugin Prefs Directory")
+
+        try:
+            requirements.requirements_check(self.pluginId)
+        except ImportError as exception_error:
+            self.logger.error(f"PLUGIN STOPPED: {exception_error}")
+            self.do_not_start_devices = True
+            self.stopPlugin()
+
+
         self._event_loop = asyncio.new_event_loop()
 
         asyncio.set_event_loop(self._event_loop)
