@@ -1050,7 +1050,10 @@ class Plugin(indigo.PluginBase):
             self.logger.error(f"PLUGIN STOPPED: {exception_error}")
             self.do_not_start_devices = True
             self.stopPlugin()
-
+        except:
+            self.logger.debug(f"Caught Exception with requirements, skipping", exc_info=True)
+            self.logger.info(f"Caught exception with importing requirements file, see debug log for details")
+            pass
 
         self._event_loop = asyncio.new_event_loop()
 
