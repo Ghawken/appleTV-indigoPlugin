@@ -11,6 +11,8 @@ import threading
 import traceback
 import inspect
 import asyncio
+import uuid
+
 from packaging import version
 import ipaddress
 
@@ -492,6 +494,12 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             self.plugin.logger.info(f"Run Command {command} Failed with a 'TypeError'.  Normally this means you have specified Optional Arguments for a command that should have none. ")
             self.plugin.logger.info(f"Please check and delete Optional Arguments in the action.")
             self.plugin.logger.debug(f"Type Error caught.  ?Optional Arguments.  Full Error:",exc_info=True)
+        except FileNotFoundError:
+            self.plugin.logger.info(f"Run Command {command} Failed with a 'FileNotFoundError' ")
+            self.plugin.logger.debug(f"File Not Found Error caught.Full Error:",exc_info=True)
+        except pyatv.exceptions.InvalidStateError as ex:
+            self.plugin.logger.info(f"Run Command {command} Failed with a 'InvalidStateError'.  Typically this means already streaming to the device ")
+            self.plugin.logger.debug(f"Invalid State Error caught.Full Error:",exc_info=True)
         except:
             self.plugin.logger.debug("General Exception Caught:",exc_info=True)
             self.plugin.logger.info("Could not run this command at this time.")
@@ -618,7 +626,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                             pass
                     while True:
                         await asyncio.sleep(20)
-                        self.plugin.logger.debug(f"Within main sleep 20 second loop killconnection {self._killConnection}")
+                        #self.plugin.logger.debug(f"Within main sleep 20 second loop killconnection {self._killConnection}")
                         if self._killConnection:
                             self.plugin.logger.debug("Manually raise ConnectionReset Error - Kill Current Connection")
                             raise ConnectionResetError("Connection lost.  Raising Exception to restart loop manually.")
@@ -1020,24 +1028,24 @@ class Plugin(indigo.PluginBase):
             self.logger.exception("Error validate Config")
             return (True, values_dict)
 
-    def runConcurrentThread(self):
-
-        try:
-            self.sleep(1)
-            self.sleep(5)
-            self.pluginStartingUp = False
-            self.sleep(10)
-
-            while True:
-                self.sleep(5)
-
-        except self.StopThread:
-            ## stop the homekit drivers
-            self.logger.info("Completing full Shutdown ...")
-
-        except:
-            self.logger.exception("Exception in runConcurrentThread", exc_info=True)
-            self.sleep(2)
+    # def runConcurrentThread(self):
+    #
+    #     try:
+    #         self.sleep(1)
+    #         self.sleep(5)
+    #         self.pluginStartingUp = False
+    #         self.sleep(10)
+    #
+    #         while True:
+    #             self.sleep(5)
+    #
+    #     except self.StopThread:
+    #         ## stop the homekit drivers
+    #         self.logger.info("Completing full Shutdown ...")
+    #
+    #     except:
+    #         self.logger.exception("Exception in runConcurrentThread", exc_info=True)
+    #         self.sleep(2)
 
 
     def startup(self):
@@ -1362,68 +1370,82 @@ class Plugin(indigo.PluginBase):
         if foundDevice == False:
             self.logger.info("No artwork saved.  The appleTV appears to have not been found.")
 
-
-
-    def speakText(self, valuesDict, typeId):
-        self.logger.debug(f"speakText Called {valuesDict} & {typeId}")
+## Thread and multi-thread this so aim for multiple devices to be in sync
+    def speakText_thread(self, valuesDict, typeId, devId):
+        ## New thread every time this is run..
         props = valuesDict.props
-        self.logger.debug(f"Props equal: {props}")
-        if props["appleTV"] =="" or props["appleTV"]=="":
+        appletv_device = props['appleTV']
+        if props["appleTV"] == "" or props["appleTV"] == "":
             self.logger.info("No AppleTV selected.")
             return
-        texttospeak = self.substitute(props.get("texttospeak",""))
-        # allow variable device substitution
-        appleTVid = props["appleTV"]
-        self.logger.info(f"Speaking Text: {texttospeak} to appleTV Device ID {appleTVid}")
-        foundDevice = False
-        ffmpegpath = self.pathtoPlugin + '/ffmpeg/ffmpeg'
-        #ffmpeg - i        Input.aiff - f        mp3 - acodec        libmp3lame - ab        192000 - ar        44100        Output.mp3
+        self.logger.debug(f"Starting a new thread to manage speak command.  Total threads active:{threading.active_count()}")
+        for thread in threading.enumerate():
+            if str(thread.name) == str(appletv_device):
+                self.logger.info(f"You cannot send speak commands to the same device so quickly.  Aborted.")
+                return
 
+        threading.Thread(target=self.speakText,name=str((appletv_device)),args=[valuesDict, typeId]).start()
+
+    def speakText(self, valuesDict, typeId):
         try:
-            p2 = subprocess.Popen(["say",str(texttospeak), "-o",self.speakPath+"/"+str(appleTVid)+".aiff" ])
-            output, err = p2.communicate()
-            self.logger.debug(str(texttospeak))
-            self.logger.debug('say return code:' + str(p2.returncode) + ' output:' + str(
-                output) + ' error:' + str(err))
-        except Exception as e:
-            self.logger.exception(u'Caught Exception within ffmpeg conversion')
-        ffmpegpath = "./ffmpeg/ffmpeg"
-        outputfile = self.speakPath+"/"+str(appleTVid)
-        try:
-            argstopass = '"' + ffmpegpath + '"' +' -y'+ ' -i "' +outputfile+".aiff" + '" -f mp3 "' + str(outputfile)+".mp3" + '"'
-            self.logger.debug(argstopass)
-            p1 = subprocess.Popen([argstopass], shell=True)
-            outs, errs = p1.communicate(timeout=5)
-           # self.logger.debug(str(argstopass))
-            self.logger.debug('ffmpeg return code:' + str(p1.returncode) + ' output:' + str(
-                outs) + ' error:' + str(errs))
+            self.logger.debug(f"Thread: speakText Called {valuesDict} & {typeId}")
+            #$tempname = str(uuid.uuid4())  ## use uuid4 for filename to avoid clashes
+            props = valuesDict.props
 
-        except subprocess.TimeoutExpired as e:
-            p1.kill()
-            outs, errs = p1.communicate()
-            self.logger.info("{}".format(outs))
-            self.logger.warning("{}".format(errs))
-        except Exception as e:
-            self.logger.exception(u'Caught Exception within ffmpeg conversion')
+            if props["appleTV"] =="" or props["appleTV"]=="":
+                self.logger.info("No AppleTV selected.")
+                return
+            texttospeak = self.substitute(props.get("texttospeak",""))
+            # allow variable & device Indigo substitution
+            appleTVid = props["appleTV"]
+            tempname = str(appleTVid)  ## don't use unique - otherwise file deletion issue.  Single file, reused.
+            self.logger.info(f"Speaking Text: {texttospeak} to appleTV Device ID {appleTVid}")
+            foundDevice = False
+            #ffmpeg - i        Input.aiff - f        mp3 - acodec        libmp3lame - ab        192000 - ar        44100        Output.mp3
 
-        self.logger.debug("{}".format(outs))
-        self.logger.debug("{}".format(errs))
+            ## this is now thread - so likely best to use run, which will hang until completed.  With timeout which will be caught.
+            ## check = True here causes exception to occur if doesn't return correctly.
 
-        command = "stream_file"
-        args = str(outputfile)+".mp3"
+            p2 = subprocess.run(["say",str(texttospeak), "-o",self.speakPath+"/"+str(tempname)+".aiff" ], timeout=10, check=True )
 
-        command = f"{command}={args}"
+            self.logger.debug(f"Text to Speak is={texttospeak}")
+            self.logger.debug('Say Command: Return code:' + str(p2.returncode) + ' output:' + str(p2.stdout) + ' error:' + str(p2.stderr))
+            ffmpegpath = "./ffmpeg/ffmpeg"
+            outputfile = self.speakPath+"/"+str(tempname)
+            self.logger.debug(f"Using File: {outputfile}")
 
-        self.logger.debug(f"Sending Command {command} to appleTV Device ID {appleTVid}")
-        for appletvManager in self.appleTVManagers:
-            if int(appletvManager.device_ID) == int(appleTVid):
-                foundDevice = True
-                self.logger.debug(f"Found correct AppleTV listener/manager. {appletvManager} and id {appletvManager.device_ID}")
+            #argstopass = [ ffmpegpath,"-y", "-i",'"'+ str(outputfile)+".aiff"+'"',"-f mp3",'"' + str(outputfile)+ '.mp3' +'"'  ]
+            argstopass = [ffmpegpath, "-y", "-i",str(outputfile) + ".aiff" ,str(outputfile) + '.mp3']
+            self.logger.debug(f"{argstopass}")
 
-                appletvManager.send_command(command,args )
+            p1 = subprocess.run(argstopass,timeout=10, check=True)
+            self.logger.debug('ffmpeg return code:' + str(p1.returncode) + ' output:' + str(p1.stdout) + ' error:' + str(p1.stderr))
 
-        if foundDevice == False:
-            self.logger.info("No Annoucement made.  The appleTV appears to have not been found.")
+            ## setup command to send
+            command = "stream_file"
+            args = str(outputfile)+".mp3"
+            command = f"{command}={args}"
+
+            self.logger.debug(f"Sending Command {command} to appleTV Device ID {appleTVid}")
+            for appletvManager in self.appleTVManagers:
+                if int(appletvManager.device_ID) == int(appleTVid):
+                    foundDevice = True
+                    self.logger.debug(f"Found correct AppleTV listener/manager. {appletvManager} and id {appletvManager.device_ID}")
+                    appletvManager.send_command(command,args )
+            if foundDevice == False:
+                self.logger.info("No Annoucement made.  The appleTV appears to have not been found.")
+
+        except subprocess.TimeoutExpired as exc:
+            self.logger.info(f"Speak command failed, because of timeout.")
+            self.logger.debug(f"Logging:",exc_info=True)
+        except subprocess.CalledProcessError as exc:
+            self.logger.info(f"Speak command failed, subprocess did not return correctly.")
+            self.logger.debug(f"Logging:",exc_info=True)
+        except:
+            self.logger.debug(f"Exception in Speak Thread.  Ending.", exc_info=True)
+
+        return
+
 
     async def process_playstatus(self, playstatus,  atv, time_start,deviceid, isAppleTV):
         try:

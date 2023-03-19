@@ -66,7 +66,7 @@
     </Action>
        <Action id="speakAnnoucement">
         <Name>Speak Annoucement</Name>
-        <CallbackMethod>speakText</CallbackMethod>
+        <CallbackMethod>speakText_thread</CallbackMethod>
         <ConfigUI>
 			<Field id="appleTV" type="menu" defaultValue="0" dynamicReload="true" tooltip="select appleTV ">
 				<List class="indigo.devices" filter="self.appleTV"/>
