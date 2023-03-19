@@ -821,9 +821,11 @@ class Plugin(indigo.PluginBase):
             else:
                 self.logger.info(f"{device.name} has not been setup in Device Edit.  Suggest setup connection or delete device.")
                 device.updateStateOnServer(key="status", value="Awaiting Setup")
+                device.setErrorStateOnServer("Device needs to be setup in Device Edit Screen.")
                 device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
         else:
             device.updateStateOnServer(key="status", value="Starting Up")
+            device.setErrorStateOnServer(None)
             device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
 
 
@@ -1384,7 +1386,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.info(f"You cannot send speak commands to the same device so quickly.  Aborted.")
                 return
 
-        threading.Thread(target=self.speakText,name=str((appletv_device)),args=[valuesDict, typeId]).start()
+        threading.Thread(target=self.speakText,name=str(appletv_device),args=[valuesDict, typeId]).start()
 
     def speakText(self, valuesDict, typeId):
         try:
@@ -1730,6 +1732,15 @@ class Plugin(indigo.PluginBase):
                 name_used = "appleTV " + name
                 if "HomePod" in str(model):
                     name_used = "HomePod " +name
+                if "AudioAccessory6" in str(model):
+                    name_used = "HomePod " + name
+
+                if name_used in indigo.devices:
+                    # name already exists rename it
+                    name_used = name_used+"-2"
+                    if name_used in indigo.devices:
+                        name_used = name_used+"1"
+                # rather not use a while loop here - so as above, 2 tries
 
                 dev = indigo.device.create(
                     protocol=		indigo.kProtocol.Plugin,
