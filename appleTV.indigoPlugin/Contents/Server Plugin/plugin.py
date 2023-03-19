@@ -1441,7 +1441,9 @@ class Plugin(indigo.PluginBase):
             self.logger.info(f"Speak command failed, because of timeout.")
             self.logger.debug(f"Logging:",exc_info=True)
         except subprocess.CalledProcessError as exc:
-            self.logger.info(f"Speak command failed, subprocess did not return correctly.")
+            self.logger.info(f"Speak command failed. Have you run the UnQuarantine terminal Command?  This is need once after update, to use ffmpeg.  This one Below:")
+            self.logger.info("{}".format("sudo xattr -rd com.apple.quarantine '" + indigo.server.getInstallFolderPath() + "/" + "Plugins'"))
+            self.logger.debug(f"subprocess did not return correctly.")
             self.logger.debug(f"Logging:",exc_info=True)
         except:
             self.logger.debug(f"Exception in Speak Thread.  Ending.", exc_info=True)
