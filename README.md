@@ -25,8 +25,9 @@ Enables:
 But before anything
 
 In a terminal window enter:
+(OS16.4 Fix for a couple of library based issues - waiting update at library end)
 
-#### `pip3 install pyatv`
+#### `pip3 install git+https://github.com/Ghawken/pyatv@os16.4fix`
 
 Double click the release indigoplugin File and install.
 

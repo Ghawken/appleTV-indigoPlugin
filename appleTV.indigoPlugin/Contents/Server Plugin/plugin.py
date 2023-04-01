@@ -32,23 +32,21 @@ except:
 import time as t
 import binascii
 
-try:
-    import pyatv
-    import pyatv.const
-    from pyatv.const import (
-        FeatureName,
-        FeatureState,
-        InputAction,
-        Protocol,
-        RepeatState,
-        ShuffleState,
-        PairingRequirement
-    )
-    import pyatv.exceptions
-    from pyatv.interface import retrieve_commands
-except:
-    # error in init when can message
-    pass
+
+import pyatv
+import pyatv.const
+from pyatv.const import (
+    FeatureName,
+    FeatureState,
+    InputAction,
+    Protocol,
+    RepeatState,
+    ShuffleState,
+    PairingRequirement
+)
+import pyatv.exceptions
+from pyatv.interface import retrieve_commands
+
 
 import subprocess
 import sys
@@ -278,7 +276,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                 device.updateStateOnServer("PowerState", "Idle")
                 device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
         except:
-            self.plugin.logger.debug("Exception in Powerstate Updatee",exc_info=True)
+            self.plugin.logger.debug("Exception in Powerstate Update",exc_info=True)
 
 
     def _handle_disconnect(self):
@@ -413,6 +411,9 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             if self.atv == None:
                 self.plugin.logger.info("Current AppleTV is not connected.  Aborting Command request.")
                 return
+            if isinstance(self.atv, bool):
+                self.plugin.logger.info("Current AppleTV appears to be not connected.  Aborting Command.")
+                return
             ctrl = retrieve_commands(pyatv.interface.RemoteControl)
             metadata = retrieve_commands(pyatv.interface.Metadata)
             power = retrieve_commands(pyatv.interface.Power)
@@ -460,7 +461,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             self.plugin.logger.error(f"Unknown command: {cmd}")
             return 1
         except:
-            self.plugin.logger.exception("")
+            self.plugin.logger.exception("Caught Exception:")
 
     async def _exec_command(self, obj, command, print_result, *args):
         try:
@@ -625,7 +626,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                         except pyatv.exceptions.NotSupportedError:
                             pass
                     while True:
-                        await asyncio.sleep(20)
+                        await asyncio.sleep(2)
                         #self.plugin.logger.debug(f"Within main sleep 20 second loop killconnection {self._killConnection}")
                         if self._killConnection:
                             self.plugin.logger.debug("Manually raise ConnectionReset Error - Kill Current Connection")
