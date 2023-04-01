@@ -1,1 +1,1 @@
-git+git://github.com/Ghawken/pyatv.git@os16.4fix#egg=pyatv
+pyatv==0.10.4

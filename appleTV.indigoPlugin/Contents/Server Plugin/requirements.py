@@ -36,10 +36,16 @@ def requirements_check(plugin_id):
             try:
                 plugin_package_version = packages_dict[requirements_package]
             except KeyError as e:
-                raise ImportError(f"'{requirements_package}' Package missing.\n\n========> Run 'pip3 install {requirements_package}' in Terminal window, then reload plugin. <========\n")
+                if requirements_package == "pyatv":
+                    raise ImportError(f"'\n\n\n{requirements_package}' Package missing.\n\n========> Run 'pip3 install git+https://github.com/Ghawken/pyatv@os16.4fix' in Terminal window, then reload plugin. <========\n")
+                else:
+                    raise ImportError(f"\n\n\n'{requirements_package}' Package missing.\n\n========> Run 'pip3 install {requirements_package}' in Terminal window, then reload plugin. <========\n")
 
             if version.parse(plugin_package_version) < version.parse(requirements_version):
-                raise ImportError(
-                    f"'{requirements_package}' Package should be updated.\n\n========> Run 'pip3 install --upgrade {requirements_package}' in a Terminal window, then reload plugin. <========\n")
+                if requirements_package=="pyatv":
+                    raise ImportError( f"\n\n\n'{requirements_package}' Package should be updated.\n\n========> Run 'pip3 install git+https://github.com/Ghawken/pyatv@os16.4fix' in a Terminal window, then reload plugin. <========\n")
+                else:
+                    raise ImportError( f"\n\n\n\'{requirements_package}' Package should be updated.\n\n========> Run 'pip3 install --upgrade {requirements_package}' in a Terminal window, then reload plugin. <========\n")
+
     except IOError as e:
         raise IOError(f"Unable to access requirements file to check required packages. IO Error: {e}")
