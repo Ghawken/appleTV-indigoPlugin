@@ -37,13 +37,13 @@ def requirements_check(plugin_id):
                 plugin_package_version = packages_dict[requirements_package]
             except KeyError as e:
                 if requirements_package == "pyatv":
-                    raise ImportError(f"'\n\n\n{requirements_package}' Package missing.\n\n========> Run 'pip3 install git+https://github.com/Ghawken/pyatv@os16.4fix' in Terminal window, then reload plugin. <========\n")
+                    raise ImportError(f"'\n\n\n{requirements_package}' Package missing.\n\n========> Run 'pip3 install pyatv' in Terminal window, then reload plugin. <========\n")
                 else:
                     raise ImportError(f"\n\n\n'{requirements_package}' Package missing.\n\n========> Run 'pip3 install {requirements_package}' in Terminal window, then reload plugin. <========\n")
 
             if version.parse(plugin_package_version) < version.parse(requirements_version):
                 if requirements_package=="pyatv":
-                    raise ImportError( f"\n\n\n'{requirements_package}' Package should be updated.\n\n========> Run 'pip3 install git+https://github.com/Ghawken/pyatv@os16.4fix' in a Terminal window, then reload plugin. <========\n")
+                    raise ImportError( f"\n\n\n'{requirements_package}' Package should be updated.\n\n========> Run 'pip3 install pyatv --upgrade' in a Terminal window, then reload plugin. <========\n")
                 else:
                     raise ImportError( f"\n\n\n\'{requirements_package}' Package should be updated.\n\n========> Run 'pip3 install --upgrade {requirements_package}' in a Terminal window, then reload plugin. <========\n")
 
