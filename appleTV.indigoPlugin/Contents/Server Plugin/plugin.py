@@ -165,7 +165,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         self.plugin = plugin
         self.plugin.logger.debug("Within init of AppleTVListener/all")
         self.deviceid = deviceid
-        self.volume_level = float(0)
+        self.volume_level = 0 #self.atv.audio.volume
         self.atv = None
         #self.isAppleTV = config_appleTV
         self.isAppleTV = None ## generate this internally in this service
@@ -648,12 +648,16 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                     self.plugin.logger.debug("Updating app list")
                     self.plugin.logger.info(f"{device.name} successfully connected and real-time Push updating enabled. (if available!)")
                     timeretry = 10
-                    stateList = [
-                        {'key': 'RAOPPort', 'value': self.RAOP_port},
-                        {'key': 'AIRPLAYPort', 'value': self.airplay_port},
-                        {'key': 'CompanionPort', 'value': self.companion_port}
-                    ]
-                    device.updateStatesOnServer(stateList)
+                    try:
+                        stateList = [
+                            {'key': 'RAOPPort', 'value': self.RAOP_port},
+                            {'key': 'AIRPLAYPort', 'value': self.airplay_port},
+                            {'key': 'CompanionPort', 'value': self.companion_port},
+                            {'key': 'Volume', 'value': self.atv.audio.volume},  ## set volume on first connection
+                        ]
+                        device.updateStatesOnServer(stateList)
+                    except:
+                        self.plugin.logger.debug(f"Caught exception setting volume and ports on start",exc_info=True)
                     if self.isAppleTV:
                         try:
                             await self._update_app_list()
