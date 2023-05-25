@@ -159,12 +159,13 @@ class UniqueQueue(Queue):
         return self.queue.pop()
 
 ####################################################################################
-class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListener, pyatv.interface.PowerListener):
+class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListener, pyatv.interface.PowerListener, pyatv.interface.AudioListener):
 
     def __init__(self, plugin, loop, atv_config,deviceid, config_appleTV, thisisHomePod, devicename):
         self.plugin = plugin
         self.plugin.logger.debug("Within init of AppleTVListener/all")
         self.deviceid = deviceid
+        self.volume_level = float(0)
         self.atv = None
         #self.isAppleTV = config_appleTV
         self.isAppleTV = None ## generate this internally in this service
@@ -176,7 +177,20 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         self.all_features = None
         self.cast = "unicast"
         self._killConnection = False
+        self.airplay_port = 0
+        self.RAOP_port = 0
+        self.MRP_port = 0
+        self.companion_port = 0
         self._task = self.loop.create_task(self.loop_atv(self.loop, atv_config=self.atv_config, deviceid=self.deviceid))
+
+    def volume_update(self, old_level: float, new_level: float):
+        try:
+            self.volume_level = new_level
+            self.plugin.logger.debug(f"Volume Update Received: {old_level=} and {new_level=}")
+            device = indigo.devices[self.deviceid]
+            device.updateStateOnServer("Volume",  new_level)
+        except:
+            self.plugin.logger.debug("Exception in Volume Level Update", exc_info=True)
 
     ## Add properties
     @property
@@ -552,6 +566,19 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             self.plugin.logger.debug(f"AppleTV:\n {config}") #{config.services[0].pairing}")
             self.isAppleTV = False
             for service in config.services:
+                try:
+                    if service.protocol == Protocol.Companion:
+                        self.companion_port = service.port
+                    if service.protocol == Protocol.RAOP:
+                        self.RAOP_port = service.port
+                    elif service.protocol == Protocol.AirPlay:
+                        self.airplay_port = service.port
+                    elif service.protocol == Protocol.MRP:
+                        self.MRP_port = service.port
+                except:
+                    self.plugin.logger.debug(f"Caught Exception with setting ports {service}", exc_info=True)
+                    pass
+
                 if service.pairing == PairingRequirement.NotNeeded or service.pairing == PairingRequirement.Disabled or service.pairing == PairingRequirement.Unsupported:
                     self.plugin.logger.debug(f"\nService Protocol SKIPPED: {service.protocol}\nServicePort:{service.port}\nServiceEnabled:{service.enabled}\nServiceProperties:{service.properties}\nServicePairing:{service.pairing}\nServiceIdent:{service.identifier}")
                     continue
@@ -602,6 +629,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                     self.atv.push_updater.listener = self
                     self.atv.push_updater.start()
                     self.atv.power.listener =self
+                    self.atv.audio.listener = self
                     self.plugin.logger.debug("Push updater started")
                     device = indigo.devices[deviceid]
                     device.updateStateOnServer(key="status", value="Paired. Push Updating.")
@@ -620,6 +648,12 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                     self.plugin.logger.debug("Updating app list")
                     self.plugin.logger.info(f"{device.name} successfully connected and real-time Push updating enabled. (if available!)")
                     timeretry = 10
+                    stateList = [
+                        {'key': 'RAOPPort', 'value': self.RAOP_port},
+                        {'key': 'AIRPLAYPort', 'value': self.airplay_port},
+                        {'key': 'CompanionPort', 'value': self.companion_port}
+                    ]
+                    device.updateStatesOnServer(stateList)
                     if self.isAppleTV:
                         try:
                             await self._update_app_list()
@@ -1490,8 +1524,12 @@ class Plugin(indigo.PluginBase):
                     playingState = "Idle"
                 if state == pyatv.const.DeviceState.Playing:
                     playingState = "Playing"
+                    powerstate = True
+                    powerstate_string = "On"
                 elif state == pyatv.const.DeviceState.Paused:
                     playingState = "Paused"
+                    powerstate = True
+                    powerstate_string = "On"
                 elif state == pyatv.const.DeviceState.Seeking:#, pyatv.const.DeviceState.Stopped):
                     playingState = "Seeking"
                 elif state ==pyatv.const.DeviceState.Stopped:

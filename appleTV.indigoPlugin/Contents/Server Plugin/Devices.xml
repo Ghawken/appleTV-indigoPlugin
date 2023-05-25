@@ -102,17 +102,15 @@
 					<TriggerLabel>name</TriggerLabel>
 					<ControlPageLabel>name</ControlPageLabel>
 				</State>
-
-				<State id="DMAPPort">
-					<ValueType>string</ValueType>
-					<TriggerLabel>DMAPPort</TriggerLabel>
-					<ControlPageLabel>DMAPPort</ControlPageLabel>
+				<State id="Volume">
+					<ValueType>Float</ValueType>
+					<TriggerLabel>Volume</TriggerLabel>
+					<ControlPageLabel>Volume</ControlPageLabel>
 				</State>
-
-				<State id="MRPPort">
+				<State id="CompanionPort">
 					<ValueType>string</ValueType>
-					<TriggerLabel>MRPPort</TriggerLabel>
-					<ControlPageLabel>MRPPort</ControlPageLabel>
+					<TriggerLabel>CompanionPort</TriggerLabel>
+					<ControlPageLabel>CompanionPort</ControlPageLabel>
 				</State>
 
 				<State id="AIRPLAYPort">
@@ -120,7 +118,11 @@
 					<TriggerLabel>AIRPLAYPort</TriggerLabel>
 					<ControlPageLabel>AIRPLAYPort</ControlPageLabel>
 				</State>
-
+				<State id="RAOPPort">
+					<ValueType>string</ValueType>
+					<TriggerLabel>ROAPPort</TriggerLabel>
+					<ControlPageLabel>ROAPPort</ControlPageLabel>
+				</State>
 
 				<State id="model">
 					<ValueType>string</ValueType>
