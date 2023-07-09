@@ -181,6 +181,8 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         self.RAOP_port = 0
         self.MRP_port = 0
         self.companion_port = 0
+        self.manufacturer = "Apple"
+        self.model = "Unknown"
         self._task = self.loop.create_task(self.loop_atv(self.loop, atv_config=self.atv_config, deviceid=self.deviceid))
 
     def volume_update(self, old_level: float, new_level: float):
@@ -191,6 +193,9 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             device.updateStateOnServer("Volume",  new_level)
         except:
             self.plugin.logger.debug("Exception in Volume Level Update", exc_info=True)
+
+    def outputdevices_update(self, old_devices, new_devices ):
+        self.plugin.logger.debug(f"Outdevice updated: {new_devices=}")
 
     ## Add properties
     @property
@@ -573,6 +578,10 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                         self.RAOP_port = service.port
                     elif service.protocol == Protocol.AirPlay:
                         self.airplay_port = service.port
+                        if 'manufacturer' in service.properties:
+                            self.manufacturer = service.properties['manufacturer']
+                        if 'model' in service.properties:
+                            self.model = service.properties['model']
                     elif service.protocol == Protocol.MRP:
                         self.MRP_port = service.port
                 except:
@@ -649,13 +658,22 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                     self.plugin.logger.info(f"{device.name} successfully connected and real-time Push updating enabled. (if available!)")
                     timeretry = 10
                     try:
+                        model = self.atv.device_info.model
+                        if model == pyatv.const.DeviceModel.Unknown:
+                            model = self.model
+                        else:
+                            model = str(self.atv.device_info.model)
+
                         stateList = [
                             {'key': 'RAOPPort', 'value': self.RAOP_port},
                             {'key': 'AIRPLAYPort', 'value': self.airplay_port},
+                            {'key': 'manufacturer', 'value': self.manufacturer},
                             {'key': 'CompanionPort', 'value': self.companion_port},
+                            {'key': 'model' , 'value': model},
                             {'key': 'Volume', 'value': self.atv.audio.volume},  ## set volume on first connection
                         ]
                         device.updateStatesOnServer(stateList)
+
                     except:
                         self.plugin.logger.debug(f"Caught exception setting volume and ports on start",exc_info=True)
                     if self.isAppleTV:
@@ -835,38 +853,41 @@ class Plugin(indigo.PluginBase):
         return True
 
     def deviceStartComm(self, device):
-        self.logger.debug(f"{device.name}: Starting {device.deviceTypeId} Device {device.id} ")
+        try:
+            self.logger.debug(f"{device.name}: Starting {device.deviceTypeId} Device {device.id} ")
 
-        if self.do_not_start_devices:  # This is set on if Package requirements listed in requirements.txt are not met
-            return
+            if self.do_not_start_devices:  # This is set on if Package requirements listed in requirements.txt are not met
+                return
 
-        device.stateListOrDisplayStateIdChanged()
+            device.stateListOrDisplayStateIdChanged()
 
-        if device.enabled:
-            device.updateStateOnServer(key="status", value="Starting Up")
-            device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
-            identifier = device.states["identifier"]
-            credentials = device.ownerProps.get("credentials","")
-            if credentials != "" :
-                self.logger.info(f"{device.name} Device has been Setup, attempting to connect.")
-                new_data = {}
-                if credentials == "":  ## future use.
-                    thisisappleTV = False
-                else:
-                    thisisappleTV = True
-                new_data["credentials"] = credentials
-                new_data["identifier"] = identifier
-                self.appleTVManagers.append( appleTVListener(self, self._event_loop, new_data, device.id, thisisappleTV, False, device.name ))
-            else:
-                self.logger.info(f"{device.name} has not been setup in Device Edit.  Suggest setup connection or delete device.")
-                device.updateStateOnServer(key="status", value="Awaiting Setup")
-                device.setErrorStateOnServer("Device needs to be setup in Device Edit Screen.")
+            if device.enabled:
+                device.updateStateOnServer(key="status", value="Starting Up")
                 device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
-        else:
-            device.updateStateOnServer(key="status", value="Starting Up")
-            device.setErrorStateOnServer(None)
-            device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
-
+                identifier = device.states["identifier"]
+                credentials = device.ownerProps.get("credentials","")
+                if credentials != "" :
+                    self.logger.info(f"{device.name} Device has been Setup, attempting to connect.")
+                    new_data = {}
+                    if credentials == "":  ## future use.
+                        thisisappleTV = False
+                    else:
+                        thisisappleTV = True
+                    new_data["credentials"] = credentials
+                    new_data["identifier"] = identifier
+                    #object = appleTVListener(self, self._event_loop, new_data, device.id, thisisappleTV, False, device.name )
+                    self.appleTVManagers.append(  appleTVListener(self, self._event_loop, new_data, device.id, thisisappleTV, False, device.name ) )
+                else:
+                    self.logger.info(f"{device.name} has not been setup in Device Edit.  Suggest setup connection or delete device.")
+                    device.updateStateOnServer(key="status", value="Awaiting Setup")
+                    device.setErrorStateOnServer("Device needs to be setup in Device Edit Screen.")
+                    device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
+            else:
+                device.updateStateOnServer(key="status", value="Starting Up")
+                device.setErrorStateOnServer(None)
+                device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
+        except:
+            self.logger.exception("Excepotion in Device Start:")
 
     def startPairing(self, valuesDict, type_id="", dev_id=None):
         self.logger.debug(u'Start Pairing Button pressed Called.')
@@ -1737,7 +1758,9 @@ class Plugin(indigo.PluginBase):
             model = atv.device_info.model
             identifier = atv.identifier
 
-            self.logger.debug(f"\n{ip}\n{name}\n{mac}\n{model}\n{operating_system}")
+
+            self.logger.debug(f"Atv DeviceInfo:\n {atv.device_info.raw_model=}")
+            self.logger.debug(f"\n{ip=}\n{name=}\n{mac=}\n{model=}\n{operating_system=}")
 
             for dev in indigo.devices.iter("self"):
                 if "identifier" not in dev.states: continue

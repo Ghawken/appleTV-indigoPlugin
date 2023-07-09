@@ -129,7 +129,11 @@
 					<TriggerLabel>model</TriggerLabel>
 					<ControlPageLabel>model</ControlPageLabel>
 				</State>
-
+				<State id="manufacturer">
+					<ValueType>string</ValueType>
+					<TriggerLabel>model</TriggerLabel>
+					<ControlPageLabel>manufacturer</ControlPageLabel>
+				</State>
 
 				<State id="deepSleep">
 					<ValueType>boolean</ValueType>
