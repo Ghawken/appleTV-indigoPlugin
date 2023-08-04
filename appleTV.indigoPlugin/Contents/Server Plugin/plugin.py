@@ -325,6 +325,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                 self._task = None
         except Exception:  # pylint: disable=broad-except
             self.plugin.logger.debug("An error occurred while disconnecting", exc_info=True)
+        self.plugin.logger.debug(f"End of Disconnect.  Completed.")
 
     def connection_lost(self, exception: Exception) -> None:
         """Call when connection was lost."""
@@ -606,7 +607,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             self.plugin.logger.debug(f"Connecting to {config.address}")
             return (await pyatv.connect(config, loop), config.address)
         except:
-            self.plugin.logger.exception("Connect ATV Exception")
+            self.plugin.logger.debug("Connect ATV Exception", exc_info=True)
             return (False, "")
 
     def validate_ip_address(self, address):
@@ -687,25 +688,29 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                         #self.plugin.logger.debug(f"Within main sleep 20 second loop killconnection {self._killConnection}")
                         if self._killConnection:
                             self.plugin.logger.debug("Breaking loop atv while True and retrying for connection")
-                            self.disconnect()
-                            await asyncio.sleep(2)
+                            if self.atv:
+                                self.atv.close()
+                                self.atv = None
                             self._killConnection = False
                             break  ## break while True and restart connection
                             #raise ConnectionResetError("Connection lost.  Raising Exception to restart loop manually.")
 
-                else:
-                    await asyncio.sleep(timeretry)
-                    self.plugin.logger.debug(f"Attempting to Connect again...and self._killconnection {self._killConnection}")
-                    timeretry = timeretry + 10
-                    retries = retries + 1
-                    if retries>=3:
-                        self.plugin.logger.debug("Changing to Multicast Discovery as unicast IP based has failed.")
-                        if self.cast == "unicast":
-                            self.cast="multicast"
-                        else:
-                            self.cast="unicast"
-                        ### go from one to another in sets of 3...
-                        retries = 0
+                    self.plugin.logger.debug("End of Loop, attempting reconnection...")
+                    timeretry = 20
+
+
+                await asyncio.sleep(timeretry)
+                self.plugin.logger.debug(f"Attempting to Connect again...and self._killconnection {self._killConnection}")
+                timeretry = timeretry + 10
+                retries = retries + 1
+                if retries>=3:
+                    self.plugin.logger.debug("Changing to Multicast Discovery as unicast IP based has failed.")
+                    if self.cast == "unicast":
+                        self.cast="multicast"
+                    else:
+                        self.cast="unicast"
+                    ### go from one to another in sets of 3...
+                    retries = 0
 
             # except ConnectionResetError:
             #     self.plugin.logger.debug(f"Connection lost, ended or otherwise.  Hopefully restarting loop", exc_info=True)
