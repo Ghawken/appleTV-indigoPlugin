@@ -681,12 +681,17 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                             await self._update_app_list()
                         except pyatv.exceptions.NotSupportedError:
                             pass
+
                     while True:
                         await asyncio.sleep(2)
                         #self.plugin.logger.debug(f"Within main sleep 20 second loop killconnection {self._killConnection}")
                         if self._killConnection:
-                            self.plugin.logger.debug("Manually raise ConnectionReset Error - Kill Current Connection")
-                            raise ConnectionResetError("Connection lost.  Raising Exception to restart loop manually.")
+                            self.plugin.logger.debug("Breaking loop atv while True and retrying for connection")
+                            self.disconnect()
+                            await asyncio.sleep(2)
+                            self._killConnection = False
+                            break  ## break while True and restart connection
+                            #raise ConnectionResetError("Connection lost.  Raising Exception to restart loop manually.")
 
                 else:
                     await asyncio.sleep(timeretry)
@@ -698,15 +703,15 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                         if self.cast == "unicast":
                             self.cast="multicast"
                         else:
-                            self.cast=="unicast"
+                            self.cast="unicast"
                         ### go from one to another in sets of 3...
                         retries = 0
 
-            except ConnectionResetError:
-                self.plugin.logger.debug(f"Connection lost, ended or otherwise.  Hopefully restarting loop", exc_info=True)
-                self._killConnection = False
-                self._handle_disconnect()
-                return
+            # except ConnectionResetError:
+            #     self.plugin.logger.debug(f"Connection lost, ended or otherwise.  Hopefully restarting loop", exc_info=True)
+            #     self._killConnection = False
+            #     self._handle_disconnect()
+            #     return
             except Exception:
                 self.plugin.logger.debug("Exception in Loop_ATV:  Should restart.",exc_info=True)
     ################################################################################
