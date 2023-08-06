@@ -161,7 +161,6 @@ class UniqueQueue(Queue):
 
 ####################################################################################
 class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListener, pyatv.interface.PowerListener, pyatv.interface.AudioListener):
-
     def __init__(self, plugin, loop, atv_config,deviceid, config_appleTV, thisisHomePod, devicename):
         self.plugin = plugin
         self.plugin.logger.debug("Within init of AppleTVListener/all")
@@ -185,6 +184,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         self.manufacturer = "Apple"
         self.model = "Unknown"
         self._task = self.loop.create_task(self.loop_atv(self.loop, atv_config=self.atv_config, deviceid=self.deviceid))
+
 
     def volume_update(self, old_level: float, new_level: float):
         try:
@@ -904,7 +904,7 @@ class Plugin(indigo.PluginBase):
                 device.setErrorStateOnServer(None)
                 device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
         except:
-            self.logger.exception("Excepotion in Device Start:")
+            self.logger.exception("Exception in Device Start:")
 
     def startPairing(self, valuesDict, type_id="", dev_id=None):
         self.logger.debug(u'Start Pairing Button pressed Called.')
