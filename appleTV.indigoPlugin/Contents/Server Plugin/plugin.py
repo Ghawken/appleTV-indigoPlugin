@@ -441,6 +441,8 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             playing = retrieve_commands(pyatv.interface.Playing)
             stream = retrieve_commands(pyatv.interface.Stream)
             device_info = retrieve_commands(pyatv.interface.DeviceInfo)
+            user_accounts = retrieve_commands(pyatv.interface.UserAccounts)
+            keyboard = retrieve_commands(pyatv.interface.Keyboard)
             apps = retrieve_commands(pyatv.interface.Apps)
             audio = retrieve_commands(pyatv.interface.Audio)
             # Parse input command and argument from user
@@ -473,11 +475,17 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
             if cmd in stream:
                 return await self._exec_command(self.atv.stream, cmd, True, *cmd_args)
 
+            if cmd in keyboard:
+                return await self._exec_command(self.atv.keyboard, cmd, True, *cmd_args)
+
             if cmd in device_info:
                 return await self._exec_command(self.atv.device_info, cmd, True, *cmd_args)
 
             if cmd in apps:
                 return await self._exec_command(self.atv.apps, cmd, True, *cmd_args)
+
+            if cmd in user_accounts:
+                return await self._exec_command(self.atv.user_accounts, cmd, True, *cmd_args)
 
             self.plugin.logger.error(f"Unknown command: {cmd}")
             return 1
@@ -1254,6 +1262,8 @@ class Plugin(indigo.PluginBase):
             stream_list = {}
             audio_list = {}
             app_list = {}
+            keyboard_list = {}
+            useraccount_list = {}
 
             self.logger.debug(f"commandListGenerator called {values_dict}")
             if "appleTV" in values_dict:
@@ -1300,6 +1310,16 @@ class Plugin(indigo.PluginBase):
                             except:
                                 self.logger.exception("cmd_list exception")
                                 pass
+                            try:
+                                keyboard_list = retrieve_commands(pyatv.interface.Keyboard)
+                            except:
+                                self.logger.exception("cmd_list exception")
+                                pass
+                            try:
+                                useraccount_list = retrieve_commands(pyatv.interface.UserAccounts)
+                            except:
+                                self.logger.exception("cmd_list exception")
+                                pass
                             self.logger.debug(f"cmd_list {cmd_list}")
                             state_list.append((-1, "%%disabled:Remote Commands:%%"))
                             for key,value in cmd_list.items():
@@ -1327,6 +1347,14 @@ class Plugin(indigo.PluginBase):
                                     state_list.append((key, value))
                             state_list.append((-1, "%%disabled:App Commands:%%"))
                             for key, value in app_list.items():
+                                if not "DEPRECATED" in value:
+                                    state_list.append((key, value))
+                            state_list.append((-1, "%%disabled:UserAccount Commands:%%"))
+                            for key, value in useraccount_list.items():
+                                if not "DEPRECATED" in value:
+                                    state_list.append((key, value))
+                            state_list.append((-1, "%%disabled:Keyboard Commands:%%"))
+                            for key, value in keyboard_list.items():
                                 if not "DEPRECATED" in value:
                                     state_list.append((key, value))
                            # state_list =  list(cmd_list.items()) #[(v, k) for v, k in cmd_list.items()]
