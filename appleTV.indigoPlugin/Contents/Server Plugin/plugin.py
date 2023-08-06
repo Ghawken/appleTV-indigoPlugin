@@ -32,21 +32,22 @@ except:
 import time as t
 import binascii
 
-
-import pyatv
-import pyatv.const
-from pyatv.const import (
-    FeatureName,
-    FeatureState,
-    InputAction,
-    Protocol,
-    RepeatState,
-    ShuffleState,
-    PairingRequirement
-)
-import pyatv.exceptions
-from pyatv.interface import retrieve_commands
-
+try:
+    import pyatv
+    import pyatv.const
+    from pyatv.const import (
+        FeatureName,
+        FeatureState,
+        InputAction,
+        Protocol,
+        RepeatState,
+        ShuffleState,
+        PairingRequirement
+    )
+    import pyatv.exceptions
+    from pyatv.interface import retrieve_commands
+except:
+    pass
 
 import subprocess
 import sys
@@ -55,11 +56,11 @@ from os import path
 import requirements
 
 # import applescript
-import xml.dom.minidom
-import random
-import shutil
-from os import listdir
-from os.path import isfile, join
+# import xml.dom.minidom
+# import random
+# import shutil
+# from os import listdir
+# from os.path import isfile, join
 
 try:
     import indigo
@@ -664,7 +665,12 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                             model = self.model
                         else:
                             model = str(self.atv.device_info.model)
-
+                        try:
+                            power =self.atv.power.power_state
+                            self.plugin.logger.debug(f"Updating Power State.  Retrieved {power}")
+                            self.powerstate_update(power, power)  # send old and new at statrtup
+                        except:
+                            self.plugin.logger.debug(f"PowerState not supported.")
                         stateList = [
                             {'key': 'RAOPPort', 'value': self.RAOP_port},
                             {'key': 'AIRPLAYPort', 'value': self.airplay_port},
@@ -680,6 +686,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
                     if self.isAppleTV:
                         try:
                             await self._update_app_list()
+
                         except pyatv.exceptions.NotSupportedError:
                             pass
 
@@ -1535,8 +1542,6 @@ class Plugin(indigo.PluginBase):
             device = indigo.devices[deviceid]
             atv_appId = ""
             atv_app = None
-            powerstate = False
-            powerstate_string = "Unknown"
             if isAppleTV and atv.metadata.app !=None:
                 atv_app = atv.metadata.app.name
             if atv_app !=None:
@@ -1545,26 +1550,15 @@ class Plugin(indigo.PluginBase):
             playingState = "Standby"
             if atv is None:
                 playingState = "Off"
-            if isAppleTV:
-                if atv.power.power_state == pyatv.const.PowerState.Off:
-                    playingState = "Standby"
-                    powerstate = False
-                    powerstate_string = "Idle"
-                elif atv.power.power_state == pyatv.const.PowerState.On:
-                    powerstate = True
-                    powerstate_string = "On"
+
             if playstatus.device_state != None:
                 state = playstatus.device_state
                 if state in (pyatv.const.DeviceState.Idle, pyatv.const.DeviceState.Loading):
                     playingState = "Idle"
                 if state == pyatv.const.DeviceState.Playing:
                     playingState = "Playing"
-                    powerstate = True
-                    powerstate_string = "On"
                 elif state == pyatv.const.DeviceState.Paused:
                     playingState = "Paused"
-                    powerstate = True
-                    powerstate_string = "On"
                 elif state == pyatv.const.DeviceState.Seeking:#, pyatv.const.DeviceState.Stopped):
                     playingState = "Seeking"
                 elif state ==pyatv.const.DeviceState.Stopped:
@@ -1583,15 +1577,11 @@ class Plugin(indigo.PluginBase):
                 {'key': 'currentlyPlaying_Shuffle', 'value': f"{playstatus.shuffle}"},
                 {'key': 'currentlyPlaying_Title', 'value': f"{playstatus.title}"},
                 {'key': 'currentlyPlaying_TotalTime', 'value': f"{playstatus.total_time}"},
-                {'key': 'currentlyPlaying_PlayState', 'value': f"{playingState}"},
-                {'key': 'PowerState', 'value': powerstate_string},
-                {'key': 'onOffState', 'value': powerstate},
+                {'key': 'currentlyPlaying_PlayState', 'value': f"{playingState}"}
+
             ]
             device.updateStatesOnServer(stateList)
-            if powerstate:
-                device.updateStateImageOnServer(indigo.kStateImageSel.PowerOn)
-            else:
-                device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
+
         except:
             self.logger.exception("process_playlist error")
 
