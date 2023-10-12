@@ -183,7 +183,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
         self.companion_port = 0
         self.manufacturer = "Apple"
         self.model = "Unknown"
-        self._task = self.loop.create_task(self.loop_atv(self.loop, atv_config=self.atv_config, deviceid=self.deviceid))
+        self._task = self.loop.create_task( self.loop_atv(self.loop, atv_config=self.atv_config, deviceid=self.deviceid) )
 
 
     def volume_update(self, old_level: float, new_level: float):
@@ -1151,7 +1151,6 @@ class Plugin(indigo.PluginBase):
             pass
 
         self._event_loop = asyncio.new_event_loop()
-
         asyncio.set_event_loop(self._event_loop)
         self._async_thread = threading.Thread(target=self._run_async_thread)
         self._async_thread.start()
@@ -1663,9 +1662,9 @@ class Plugin(indigo.PluginBase):
     async def return_MatchedappleTVs(self, identifier, devicename, ipaddress):
         self.logger.debug("Returning all ATVS")
         if ipaddress !="UNKNOWN":
-            atvs = await pyatv.scan(self._event_loop, hosts=[ipaddress],timeout=15)
+            atvs = await pyatv.scan(self._event_loop, hosts=[ipaddress], timeout=90)
         else:
-            atvs = await pyatv.scan(self._event_loop, timeout=15)
+            atvs = await pyatv.scan(self._event_loop, timeout=90)
         if not atvs:
             self.logger.info("This deivce was not found.  Try power cycling and try again.")
             return None
