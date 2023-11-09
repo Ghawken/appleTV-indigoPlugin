@@ -23,4 +23,9 @@
         </ConfigUI>
     </MenuItem>
 
+        <MenuItem id="ffmpegcmd-show">
+        <Name>Rerun Ffmpeg Call for logging</Name>
+        <CallbackMethod>Menu_runffmpeg</CallbackMethod>
+    </MenuItem>
+
 </MenuItems>

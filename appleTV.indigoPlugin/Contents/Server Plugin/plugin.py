@@ -777,7 +777,7 @@ class Plugin(indigo.PluginBase):
         self.pluginVersion = pluginVersion
         self.pluginIndigoVersion = indigo.server.version
         self.pluginPath = os.getcwd()
-
+        self.ffmpeg_lastCommand = []
         self.prefsUpdated = False
         self.logger.info(u"")
 
@@ -1516,13 +1516,15 @@ class Plugin(indigo.PluginBase):
 
             self.logger.debug(f"Text to Speak is={texttospeak}")
             self.logger.debug('Say Command: Return code:' + str(p2.returncode) + ' output:' + str(p2.stdout) + ' error:' + str(p2.stderr))
-            ffmpegpath = "./ffmpeg/ffmpeg"
+            ffmpegpath = f"{self.pathtoPlugin}/ffmpeg/ffmpeg"
             outputfile = self.speakPath+"/"+str(tempname)
             self.logger.debug(f"Using File: {outputfile}")
 
             #argstopass = [ ffmpegpath,"-y", "-i",'"'+ str(outputfile)+".aiff"+'"',"-f mp3",'"' + str(outputfile)+ '.mp3' +'"'  ]
             argstopass = [ffmpegpath, "-y", "-i",str(outputfile) + ".aiff" ,str(outputfile) + '.mp3']
             self.logger.debug(f"{argstopass}")
+
+            self.ffmpeg_lastCommand = argstopass
 
             p1 = subprocess.run(argstopass,timeout=10, check=True)
             self.logger.debug('ffmpeg return code:' + str(p1.returncode) + ' output:' + str(p1.stdout) + ' error:' + str(p1.stderr))
@@ -1547,6 +1549,7 @@ class Plugin(indigo.PluginBase):
         except subprocess.CalledProcessError as exc:
             self.logger.info(f"Speak command failed. Have you run the UnQuarantine terminal Command?  This is need once after update, to use ffmpeg.  This one Below:")
             self.logger.info("{}".format("sudo xattr -rd com.apple.quarantine '" + indigo.server.getInstallFolderPath() + "/" + "Plugins'"))
+            self.logger.info(f"Alternatively can try the log ffmpeg output from Menu Item for further information")
             self.logger.debug(f"subprocess did not return correctly.")
             self.logger.debug(f"Logging:",exc_info=True)
         except:
@@ -1739,6 +1742,34 @@ class Plugin(indigo.PluginBase):
             # ** IMPLEMENT ME **
             self.logger.info(f"sent \"{dev.name}\" status request")
 
+    def Menu_runffmpeg(self, *args, **kwargs):
+        self.logger.debug("runffmpeg Called...")
+        # democall = ['./ffmpeg/ffmpeg', '-rtsp_transport', 'tcp', '-probesize', '32', '-analyzeduration', '0', '-re', '-i', 'rtsp://test:DR7yhrheu5@192.168.1.208:801/Back1&stream=2&fps=15&kbps=299', '-map', '0:0', '-c:v', 'copy', '-preset', 'ultrafast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p', '-color_range', 'mpeg', '-f', 'rawvideo', '-r', '15', '-b:v', '299k', '-bufsize', '2392k', '-maxrate', '299k', '-payload_type', '99', '-ssrc', '3961695', '-f', 'rtp', '-srtp_out_suite', 'AES_CM_128_HMAC_SHA1_80', '-srtp_out_params', 'ztkVCV7ooxnJDDyucPR1pMwY9C38gkDd15OdxfLI', 'srtp://192.168.1.28:51243?rtcpport=51243&localrtcpport=51243&pkt_size=1316', '-map', '0:1?', '-vn', '-c:a', 'libfdk_aac', '-profile:a', 'aac_eld', '-flags', '+global_header', '-f', 'null', '-ac', '1', '-ar', '16k', '-b:a', '24k', '-bufsize', '96k', '-payload_type', '110', '-ssrc', '4265106', '-f', 'rtp', '-srtp_out_suite', 'AES_CM_128_HMAC_SHA1_80', '-srtp_out_params', 'R1IzVHfcmj5WQEaC4cw67HlAlXuilvkWD/ShsiJW', 'srtp://192.168.1.28:62585?rtcpport=62585&localrtcpport=62585&pkt_size=188']
+        # self.ffmpeg_lastCommand = democall
+        self.logger.info(u"{0:=^130}".format(" Run Ffmpeg Command "))
+        self.logger.info("This will rerun the last ffmpeg command so that output can be checked for errors and reviewed.")
+        self.logger.info("If you haven't opened converted a file.  It may freeeze and need plugin to be restarted....")
+        self.logger.info("It will try for 15 seconds, any longer and something is up....")
+        self.logger.info("Command List to run :")
+        self.logger.info("{}".format(self.ffmpeg_lastCommand))
+        self.logger.info(f"Terminal Command Equivalent (Can copy paste to terminal to try again):\n '{self.ffmpeg_lastCommand[0]}' {self.ffmpeg_lastCommand[1]} {self.ffmpeg_lastCommand[2]} '{self.ffmpeg_lastCommand[3]}' '{self.ffmpeg_lastCommand[4]}'")
+
+        if len(self.ffmpeg_lastCommand) == 0:
+            self.logger.info("Seems like command empty ending.")
+            return
+        p1 = subprocess.Popen(self.ffmpeg_lastCommand, stderr=subprocess.PIPE, universal_newlines=True)
+        try:
+            outs, errs = p1.communicate(timeout=15)  # will raise error and kill any process that runs longer than 60 seconds
+        except subprocess.TimeoutExpired as e:
+            p1.kill()
+            outs, errs = p1.communicate()
+            self.logger.warning("{}".format(outs))
+            self.logger.warning("{}".format(errs))
+
+        self.logger.info("No Timeout: \n{}".format(outs))
+        self.logger.info("No TimeOut: Returned\n {}".format(errs))
+        self.logger.info(u"{0:=^130}".format(" Run Ffmpeg Command Ended  "))
+        self.logger.info(u"{0:=^130}".format(" Hopefully this provides some troubleshooting help  "))
     ########################################
 
     async def get_appleTVs(self, forceDiscovery):
