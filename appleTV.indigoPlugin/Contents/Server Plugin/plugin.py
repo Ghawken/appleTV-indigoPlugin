@@ -12,6 +12,7 @@ import traceback
 import inspect
 import asyncio
 import uuid
+import platform
 
 from packaging import version
 import ipaddress
@@ -789,6 +790,18 @@ class Plugin(indigo.PluginBase):
         self.logger.info("{0:<30} {1}".format("Plugin version:", pluginVersion))
         self.logger.info("{0:<30} {1}".format("Plugin ID:", pluginId))
         self.logger.info("{0:<30} {1}".format("Indigo version:", indigo.server.version))
+
+        self.logger.info("{0:<30} {1}".format("Silicon version:", str(platform.machine()) ))
+
+        self.ffmpeg_command_line = "-x86"  ## default to x86
+        if platform.machine() == "x86_64":
+            self.ffmpeg_command_line = "-x86"
+            self.logger.info("{0:<30} {1}".format("Ffmpeg version:", "Detected Intel Silicon using x86"))
+        else:
+            self.ffmpeg_command_line = "-arm"
+            self.logger.info("{0:<30} {1}".format("Ffmpeg version:", "Detected Apple Silicon using Arm"))
+
+
         self.logger.info("{0:<30} {1}".format("Python version:", sys.version.replace('\n', '')))
         self.logger.info("{0:<30} {1}".format("Python Directory:", sys.prefix.replace('\n', '')))
         self.logger.info("")
@@ -1516,7 +1529,7 @@ class Plugin(indigo.PluginBase):
 
             self.logger.debug(f"Text to Speak is={texttospeak}")
             self.logger.debug('Say Command: Return code:' + str(p2.returncode) + ' output:' + str(p2.stdout) + ' error:' + str(p2.stderr))
-            ffmpegpath = f"{self.pathtoPlugin}/ffmpeg/ffmpeg"
+            ffmpegpath = f"{self.pathtoPlugin}/ffmpeg/ffmpeg"+str(self.ffmpeg_command_line)
             outputfile = self.speakPath+"/"+str(tempname)
             self.logger.debug(f"Using File: {outputfile}")
 
