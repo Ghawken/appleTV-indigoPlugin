@@ -6,8 +6,18 @@ Author: GlennNZ
 
 """
 import logging
-import threading
+try:
+    import indigo
+except:
+    pass
+installation_output= ""
+from auto_installer import install_package_and_retry_import
 
+import subprocess
+import os
+import sys
+import threading
+import_errors = []
 import traceback
 import inspect
 import asyncio
@@ -16,23 +26,26 @@ import platform
 
 from packaging import version
 import ipaddress
-
 from queue import Queue
-
-import logging
 from logging.handlers import TimedRotatingFileHandler
-
 import time as time
 from typing import Optional
-
 try:
     import requests
 except:
     pass
-
 import time as t
 import binascii
 
+## test, base import
+try:
+    import pyatv
+except ImportError as e:
+    print("pyatv not installed, attempting installation...", e)
+    installation_output = install_package_and_retry_import()
+    import pyatv  # Retry import after installation
+
+## redo imports after installation
 try:
     import pyatv
     import pyatv.const
@@ -45,6 +58,7 @@ try:
         ShuffleState,
         PairingRequirement
     )
+    from pyatv.interface import DeviceListener, PowerListener, AudioListener, PushListener
     import pyatv.exceptions
     from pyatv.interface import retrieve_commands
 except:
@@ -63,10 +77,7 @@ import requirements
 # from os import listdir
 # from os.path import isfile, join
 
-try:
-    import indigo
-except:
-    pass
+
 
 try:
     import pydevd_pycharm
@@ -161,7 +172,7 @@ class UniqueQueue(Queue):
         return self.queue.pop()
 
 ####################################################################################
-class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListener, pyatv.interface.PowerListener, pyatv.interface.AudioListener):
+class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListener):
     def __init__(self, plugin, loop, atv_config,deviceid, config_appleTV, thisisHomePod, devicename):
         self.plugin = plugin
         self.plugin.logger.debug("Within init of AppleTVListener/all")
@@ -740,6 +751,7 @@ class appleTVListener( pyatv.interface.DeviceListener,pyatv.interface.PushListen
 class Plugin(indigo.PluginBase):
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
         indigo.PluginBase.__init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
+        global installation_output
         pfmt = logging.Formatter('%(asctime)s.%(msecs)03d\t%(levelname)s\t%(name)s.%(funcName)s:%(filename)s:%(lineno)s:\t%(message)s', datefmt='%d-%m-%Y %H:%M:%S')
         self.plugin_file_handler.setFormatter(pfmt)
         ################################################################################
@@ -769,6 +781,10 @@ class Plugin(indigo.PluginBase):
             raise ImportError("\n{0:=^100}\n{1:=^100}\n{2:=^100}\n{3:=^100}\n{4:=^100}\n{5:=^100}\n".format("=", " Fatal Error Starting appleTV Plugin  ", " Missing required Library; pyatv missing ", " Run 'pip3 install pyatv' in a Terminal window ", " and then restart plugin. ", "="))
 
         self.logger.debug(u"logLevel = " + str(self.logLevel))
+
+        if installation_output !="":
+            self.logger.warning(f"Dependencies Found for Plugin.  One time installation:\n{installation_output}")
+            self.logger.warning(f"Installed Correctly, now Starting plugin.")
 
         self._appleTVpairing = None ## single pairing - will not support pairing multiple appLeTVs at same time.  (Pairing that is - connection fine!)
 
@@ -844,6 +860,7 @@ class Plugin(indigo.PluginBase):
                 self.pluginPrefs['previousVersion']= pluginVersion
         except:
             pass
+
 
 
     def closedPrefsConfigUi(self, valuesDict, userCancelled):
@@ -1151,18 +1168,6 @@ class Plugin(indigo.PluginBase):
     def startup(self):
         self.debugLog(u"Starting Plugin. startup() method called.")
         self.logger.debug("Checking Plugin Prefs Directory")
-
-        try:
-            requirements.requirements_check(self.pluginId)
-        except ImportError as exception_error:
-            self.logger.error(f"PLUGIN STOPPED: {exception_error}")
-            self.do_not_start_devices = True
-            self.stopPlugin()
-        except:
-            self.logger.debug(f"Caught Exception with requirements, skipping", exc_info=True)
-            self.logger.info(f"Caught exception with importing requirements file, see debug log for details")
-            pass
-
         self._event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._event_loop)
         self._async_thread = threading.Thread(target=self._run_async_thread)
