@@ -70,6 +70,11 @@ import os
 from os import path
 import requirements
 
+try:
+    from homekitlink_ffmpeg import get_ffmpeg_binary
+except:
+    installation_output = install_package_and_retry_import()
+
 # import applescript
 # import xml.dom.minidom
 # import random
@@ -809,13 +814,14 @@ class Plugin(indigo.PluginBase):
 
         self.logger.info("{0:<30} {1}".format("Silicon version:", str(platform.machine()) ))
 
-        self.ffmpeg_command_line = "-x86"  ## default to x86
-        if platform.machine() == "x86_64":
-            self.ffmpeg_command_line = "-x86"
-            self.logger.info("{0:<30} {1}".format("Ffmpeg version:", "Detected Intel Silicon using x86"))
-        else:
-            self.ffmpeg_command_line = "-arm"
-            self.logger.info("{0:<30} {1}".format("Ffmpeg version:", "Detected Apple Silicon using Arm"))
+        self.ffmpeg_command_line = get_ffmpeg_binary()  ## default to x86
+        self.logger.info("{0:<30} {1}".format("Ffmpeg Path:", str(self.ffmpeg_command_line) ))
+        # if platform.machine() == "x86_64":
+        #     self.ffmpeg_command_line = "-x86"
+        #     self.logger.info("{0:<30} {1}".format("Ffmpeg version:", "Detected Intel Silicon using x86"))
+        # else:
+        #     self.ffmpeg_command_line = "-arm"
+        #     self.logger.info("{0:<30} {1}".format("Ffmpeg version:", "Detected Apple Silicon using Arm"))
 
 
         self.logger.info("{0:<30} {1}".format("Python version:", sys.version.replace('\n', '')))
@@ -1534,7 +1540,7 @@ class Plugin(indigo.PluginBase):
 
             self.logger.debug(f"Text to Speak is={texttospeak}")
             self.logger.debug('Say Command: Return code:' + str(p2.returncode) + ' output:' + str(p2.stdout) + ' error:' + str(p2.stderr))
-            ffmpegpath = f"{self.pathtoPlugin}/ffmpeg/ffmpeg"+str(self.ffmpeg_command_line)
+            ffmpegpath = self.ffmpeg_command_line
             outputfile = self.speakPath+"/"+str(tempname)
             self.logger.debug(f"Using File: {outputfile}")
 
