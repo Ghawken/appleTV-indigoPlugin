@@ -10,8 +10,6 @@ try:
     import indigo
 except:
     pass
-installation_output= ""
-from auto_installer import install_package_and_retry_import
 
 import subprocess
 import os
@@ -38,50 +36,31 @@ import time as t
 import binascii
 
 ## test, base import
-try:
-    import pyatv
-except ImportError as e:
-    print("pyatv not installed, attempting installation...", e)
-    installation_output = install_package_and_retry_import()
-    import pyatv  # Retry import after installation
-
 ## redo imports after installation
-try:
-    import pyatv
-    import pyatv.const
-    from pyatv.const import (
-        FeatureName,
-        FeatureState,
-        InputAction,
-        Protocol,
-        RepeatState,
-        ShuffleState,
-        PairingRequirement
-    )
-    from pyatv.interface import DeviceListener, PowerListener, AudioListener, PushListener
-    import pyatv.exceptions
-    from pyatv.interface import retrieve_commands
-except:
-    pass
+
+import pyatv
+import pyatv.const
+from pyatv.const import (
+    FeatureName,
+    FeatureState,
+    InputAction,
+    Protocol,
+    RepeatState,
+    ShuffleState,
+    PairingRequirement
+)
+from pyatv.interface import DeviceListener, PowerListener, AudioListener, PushListener
+import pyatv.exceptions
+from pyatv.interface import retrieve_commands
+
 
 import subprocess
 import sys
 import os
 from os import path
-import requirements
 
-try:
-    from homekitlink_ffmpeg import get_ffmpeg_binary
-except:
-    installation_output = install_package_and_retry_import()
 
-# import applescript
-# import xml.dom.minidom
-# import random
-# import shutil
-# from os import listdir
-# from os.path import isfile, join
-
+from homekitlink_ffmpeg import get_ffmpeg_binary
 
 
 try:
@@ -756,7 +735,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
 class Plugin(indigo.PluginBase):
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
         indigo.PluginBase.__init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
-        global installation_output
+
         pfmt = logging.Formatter('%(asctime)s.%(msecs)03d\t%(levelname)s\t%(name)s.%(funcName)s:%(filename)s:%(lineno)s:\t%(message)s', datefmt='%d-%m-%Y %H:%M:%S')
         self.plugin_file_handler.setFormatter(pfmt)
         ################################################################################
@@ -787,10 +766,6 @@ class Plugin(indigo.PluginBase):
 
         self.logger.debug(u"logLevel = " + str(self.logLevel))
 
-        if installation_output !="":
-            self.logger.warning(f"Dependencies Found for Plugin.  One time installation:\n{installation_output}")
-            self.logger.warning(f"Installed Correctly, now Starting plugin.")
-
         self._appleTVpairing = None ## single pairing - will not support pairing multiple appLeTVs at same time.  (Pairing that is - connection fine!)
 
         self.pluginStartingUp = True
@@ -811,17 +786,10 @@ class Plugin(indigo.PluginBase):
         self.logger.info("{0:<30} {1}".format("Plugin version:", pluginVersion))
         self.logger.info("{0:<30} {1}".format("Plugin ID:", pluginId))
         self.logger.info("{0:<30} {1}".format("Indigo version:", indigo.server.version))
-
         self.logger.info("{0:<30} {1}".format("Silicon version:", str(platform.machine()) ))
+        self.ffmpeg_command_line = get_ffmpeg_binary()
 
-        self.ffmpeg_command_line = get_ffmpeg_binary()  ## default to x86
         self.logger.info("{0:<30} {1}".format("Ffmpeg Path:", str(self.ffmpeg_command_line) ))
-        # if platform.machine() == "x86_64":
-        #     self.ffmpeg_command_line = "-x86"
-        #     self.logger.info("{0:<30} {1}".format("Ffmpeg version:", "Detected Intel Silicon using x86"))
-        # else:
-        #     self.ffmpeg_command_line = "-arm"
-        #     self.logger.info("{0:<30} {1}".format("Ffmpeg version:", "Detected Apple Silicon using Arm"))
 
 
         self.logger.info("{0:<30} {1}".format("Python version:", sys.version.replace('\n', '')))
@@ -857,15 +825,16 @@ class Plugin(indigo.PluginBase):
         self.saveDirectory = MAChome + "Documents/Indigo-appleTV/"
 
         self.logger.info(u"{0:=^130}".format(" End Initializing New Plugin  "))
-        try:
-            if version.parse(pluginVersion) != version.parse(self.previousVersion):
-                self.logger.info("Plugin Updated Version Detected.  Please run xattr command as below (copy & paste to terminal)")
-                self.logger.info("This enables Say Annoucements on HomePods.  If unused, then will not affect other functioning.")
-                self.logger.info("{}".format("sudo xattr -rd com.apple.quarantine '" + indigo.server.getInstallFolderPath() + "/" + "Plugins'"))
-                self.logger.info(u"{0:=^130}".format(" End of Setup "))
-                self.pluginPrefs['previousVersion']= pluginVersion
-        except:
-            pass
+
+        # try:
+        #     if version.parse(pluginVersion) != version.parse(self.previousVersion):
+        #         self.logger.info("Plugin Updated Version Detected.  Please run xattr command as below (copy & paste to terminal)")
+        #         self.logger.info("This enables Say Annoucements on HomePods.  If unused, then will not affect other functioning.")
+        #         self.logger.info("{}".format("sudo xattr -rd com.apple.quarantine '" + indigo.server.getInstallFolderPath() + "/" + "Plugins'"))
+        #         self.logger.info(u"{0:=^130}".format(" End of Setup "))
+        #         self.pluginPrefs['previousVersion']= pluginVersion
+        # except:
+        #     pass
 
 
 
