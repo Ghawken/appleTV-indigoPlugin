@@ -39,39 +39,14 @@ Enables:
 4. Playback mp3 files to Airplay2 speakers eg. Sonos and cheaper equivalents...
 
 ###Installation
-But before anything:
 
-In a terminal window enter:
-(OS16.4 Fix for a couple of library based issues - waiting update at library end)
+Download and double click Plugin Bundle
 
-#### `pip3 install pyatv --upgrade`
-
-Double click the release indigoplugin File and install.
-
-All going well - nothing will happen...
-
-Return to the terminal window and copy and paste the below:
-_This removes the apple quarantine bit for downloaded files and is needed for full function, used in this plugin for ffmpeg and conversion of audio files.  
-Very annoyingly unlike the pip3 command it is needed everytime you upgrade!_
-
-Arghh.. Apple...
-
-#### `sudo xattr -rd com.apple.quarantine /Library/Application\ Support/Perceptive\ Automation/Indigo\ 2022.1/Plugins`
-
-If you get a ton of red/errors.  See Below, other skip ahead to PluginConfig  
+Potential issue:
 You may need to install Command line tools for Xcode.   It is because of the dependencies of pyatv is miniaudio which requires Clang to be installed to compile.
 **See FAQ at bottom of this page if ongoing issues**
 Can try:  The below terminal command - if also fails see FAQ for manual method.
 `xcode-select —install`
-
-Common issue is your pip3 install command does not point to the Indigo Python3 install.
-Check forums, can try with pip3.10 command (only works whilst Indigo is using Python3.10)
-pip3 debug and check output given:
-
-`pip version: pip 23.0.1 from /Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/pip (python 3.10)`
-
-Directory given with pip version should look like list to be the proper Indigo one
-
 
 
 ### Steps:
