@@ -52,7 +52,8 @@ from pyatv.const import (
 from pyatv.interface import DeviceListener, PowerListener, AudioListener, PushListener
 import pyatv.exceptions
 from pyatv.interface import retrieve_commands
-
+from pyatv.storage.file_storage import FileStorage
+from pyatv.support import stringify_model, update_model_field
 
 import subprocess
 import sys
@@ -179,6 +180,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         self.companion_port = 0
         self.manufacturer = "Apple"
         self.model = "Unknown"
+        self.storage = None
         self._task = self.loop.create_task( self.loop_atv(self.loop, atv_config=self.atv_config, deviceid=self.deviceid) )
 
 
@@ -252,7 +254,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
             try:
                 apps = await self.atv.apps.app_list()
             except pyatv.exceptions.NotSupportedError:
-                self.plugin.logger.debug("Listing apps is not supported", exc_info=True)
+                self.plugin.logger.debug("Listing apps is not supported", exc_info=False)
             except pyatv.exceptions.ProtocolError:
                 self.plugin.logger.debug("Failed to update app list", exc_info=True)
             else:
@@ -559,16 +561,17 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
     def playstatus_error(self, updater, exception: Exception) -> None:
         self.plugin.logger.debug("Error in Playstatus", exc_info=True)
 
-
-    async def connect_atv(self, loop, identifier, airplay_credentials, ipaddress, cast):
+    async def connect_atv(self, loop, identifier, airplay_credentials,  ipaddress, cast):
         """Find a device and print what is playing."""
         try:
+            self.plugin.logger.debug(f"{self.storage=}")
+
             if cast == "unicast":
                 self.plugin.logger.info(f"Scanning for device using IP address: {ipaddress} and using Unicast.")
-                atvs = await pyatv.scan(loop, identifier=identifier, hosts=[ipaddress], timeout=15)
+                atvs = await pyatv.scan(loop, identifier=identifier, storage=self.storage, hosts=[ipaddress], timeout=15)
             else:
                 self.plugin.logger.info(f"Scanning for device using Multicast.")
-                atvs = await pyatv.scan(loop, identifier=identifier, timeout=20)
+                atvs = await pyatv.scan(loop, identifier=identifier, storage=self.storage, timeout=20)
             if not atvs:
                 self.plugin.logger.info(f"Failed connection as this specific {self.devicename} cannot be found.  Please check its network connection.")
                 return (False,"")
@@ -602,17 +605,22 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                     if service.enabled:
                         config.set_credentials(service.protocol, airplay_credentials)
                         self.plugin.logger.debug(f"Set Credentials {airplay_credentials} for service {service.protocol}")
-                        self.isAppleTV = True   ## if credentials == then become appleTV - not correct Samsung TV...
+                        if self.manufacturer == "Apple":
+                            self.isAppleTV = True   ## if credentials == then become appleTV - not correct Samsung or Sony TV...
                     else:
                         if service.protocol == pyatv.Protocol.MRP:
                             self.plugin.logger.info(f"{self.devicename} has MRP Protocol disabled on this device.  This will impact PowerState reporting.")
                         else:
                             self.plugin.logger.info(f"{self.devicename} has Protocol: {service.protocol} disabled.  This may impact functionality")
 
-            self.plugin.logger.debug(f"Connecting to {config.address}")
-            return (await pyatv.connect(config, loop), config.address)
+            await self.storage.update_settings(config)
+            self.plugin.logger.info(f"Connecting to {config.address}")
+            pyatv_connect = await pyatv.connect(config, loop, storage=self.storage)
+
+            await self.storage.save()
+            return (pyatv_connect, config.address)
         except:
-            self.plugin.logger.debug("Connect ATV Exception", exc_info=True)
+            self.plugin.logger.debug("Connect ATV Exception: ", exc_info=True)
             return (False, "")
 
     def validate_ip_address(self, address):
@@ -626,6 +634,14 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
 
     async def loop_atv(self, loop, atv_config, deviceid):
         timeretry = 10
+        try:
+            path_to_file_storage = os.path.join(self.plugin.pluginprefDirectory, "pyatv_storage.conf")
+            self.plugin.logger.debug(f"Using {path_to_file_storage} for storing pairing data.")
+            self.storage = FileStorage(path_to_file_storage, loop)
+            await self.storage.load()
+        except:
+            self.plugin.logger.exception("FileStorage Exception:")
+
         retries = 0
         while True:
             if timeretry > 600:
@@ -636,9 +652,9 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                 identifier = atv_config["identifier"]
                 airplay_credentials = atv_config["credentials"]
                 if self.validate_ip_address(ipaddress) and self.cast == "unicast":  ## startup
-                    (self.atv, newipaddress) = await self.connect_atv(loop, identifier, airplay_credentials, ipaddress, self.cast)
+                    (self.atv, newipaddress) = await self.connect_atv(loop, identifier, airplay_credentials,  ipaddress, self.cast)
                 else:  ## if anything other than unicast or invalid IP use multicast
-                    (self.atv, newipaddress) = await self.connect_atv(loop, identifier, airplay_credentials, "", self.cast)
+                    (self.atv, newipaddress) = await self.connect_atv(loop, identifier, airplay_credentials,  "", self.cast)
                 if self.atv:
                     self.atv.listener = self
                     self.atv.push_updater.listener = self
@@ -780,6 +796,7 @@ class Plugin(indigo.PluginBase):
 
         self._paired_credentials = None
         self.appleTVManagers = []
+        self.storage = None ##(Note this is self.plugin.storage used to manage submit code link to pairing process)
 
         self.logger.info("{0:=^130}".format(" Initializing New Plugin Session "))
         self.logger.info("{0:<30} {1}".format("Plugin name:", pluginDisplayName))
@@ -921,6 +938,7 @@ class Plugin(indigo.PluginBase):
 
     def startPairing(self, valuesDict, type_id="", dev_id=None):
         self.logger.debug(u'Start Pairing Button pressed Called.')
+
        # self.logger.debug(f"valueDict {valuesDict}\n, type_id {type_id}, and dev_id {dev_id}")
         self._appleTVpairing  = None
         device = indigo.devices[dev_id]
@@ -932,7 +950,7 @@ class Plugin(indigo.PluginBase):
             self._event_loop.create_task(self.return_MatchedappleTVs(identifier, devicename, ipaddress))
         else:
             self._event_loop.create_task(self.return_MatchedappleTVs(identifier, devicename, "UNKNOWN"))
-        self.logger.info("Scanning for all AppleTVs")
+        self.logger.info("Scanning for Devices")
 
     async def two_pairing(self, identifier, pincode):
         try:
@@ -944,6 +962,9 @@ class Plugin(indigo.PluginBase):
                 self.logger.info(f"Successfully Paired with appleTV. Please close Config window.")
 
             await self._appleTVpairing.close()
+            if self.storage !=None:
+                await self.storage.save()
+
             return self._paired_credentials
 
         except pyatv.exceptions.PairingError:
@@ -968,7 +989,6 @@ class Plugin(indigo.PluginBase):
                 return "Pairing is Unsupported"
             elif service.pairing == PairingRequirement.Disabled:
                 self.logger.debug(f"{pyatv.Protocol.AirPlay} does not support pairing. Disabled.")
-
                 self.logger.info(f"{devicename} does not need Pairing.  Attempt to Connect.  Press Save to continue.")
                 self._paired_credentials = "Pairing is Disabled"
                 return "Pairing is Disabled"
@@ -978,7 +998,16 @@ class Plugin(indigo.PluginBase):
                 self._paired_credentials = "Pairing is Not Needed"
                 return "Pairing is Not Needed"
             self._paired_credentials = None
-            self._appleTVpairing = await pyatv.pair( atv, loop=self._event_loop, protocol=pyatv.Protocol.AirPlay)
+
+            try:
+                path_to_file_storage = os.path.join(self.pluginprefDirectory, "pyatv_storage.conf")
+                self.logger.info(f"Using {path_to_file_storage} for storing pairing data.")
+                self.storage = FileStorage(path_to_file_storage, self._event_loop)
+                await self.storage.load()
+            except:
+                self.plugin.logger.exception("FileStorage Exception:")
+
+            self._appleTVpairing = await pyatv.pair( atv, loop=self._event_loop, storage=self.storage, protocol=pyatv.Protocol.AirPlay)
             await self._appleTVpairing.begin()
             self.logger.info("Begin Pairing Started")
             if self._appleTVpairing.device_provides_pin:
@@ -997,7 +1026,6 @@ class Plugin(indigo.PluginBase):
             return
 
         self._appleTVpairing.pin(vercode)
-
         self._event_loop.create_task(self.two_pairing(identifier, vercode))
         #valuesDict['credentials'] = credentials
 
@@ -1565,11 +1593,14 @@ class Plugin(indigo.PluginBase):
             device = indigo.devices[deviceid]
             atv_appId = ""
             atv_app = None
-            if isAppleTV and atv.metadata.app !=None:
-                atv_app = atv.metadata.app.name
-            if atv_app !=None:
-                atv_appId = atv.metadata.app.identifier
-            self.logger.debug(f"App Playing {atv_appId} and App Name {atv_app}")
+            try:
+                if isAppleTV and atv.metadata.app !=None:
+                    atv_app = atv.metadata.app.name
+                if atv_app !=None:
+                    atv_appId = atv.metadata.app.identifier
+                self.logger.debug(f"App Playing {atv_appId} and App Name {atv_app}")
+            except pyatv.exceptions.NotSupportedError as ex:
+                self.logger.debug(f"{ex}")
             playingState = "Standby"
             if atv is None:
                 playingState = "Off"
@@ -1740,13 +1771,11 @@ class Plugin(indigo.PluginBase):
         # democall = ['./ffmpeg/ffmpeg', '-rtsp_transport', 'tcp', '-probesize', '32', '-analyzeduration', '0', '-re', '-i', 'rtsp://test:DR7yhrheu5@192.168.1.208:801/Back1&stream=2&fps=15&kbps=299', '-map', '0:0', '-c:v', 'copy', '-preset', 'ultrafast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p', '-color_range', 'mpeg', '-f', 'rawvideo', '-r', '15', '-b:v', '299k', '-bufsize', '2392k', '-maxrate', '299k', '-payload_type', '99', '-ssrc', '3961695', '-f', 'rtp', '-srtp_out_suite', 'AES_CM_128_HMAC_SHA1_80', '-srtp_out_params', 'ztkVCV7ooxnJDDyucPR1pMwY9C38gkDd15OdxfLI', 'srtp://192.168.1.28:51243?rtcpport=51243&localrtcpport=51243&pkt_size=1316', '-map', '0:1?', '-vn', '-c:a', 'libfdk_aac', '-profile:a', 'aac_eld', '-flags', '+global_header', '-f', 'null', '-ac', '1', '-ar', '16k', '-b:a', '24k', '-bufsize', '96k', '-payload_type', '110', '-ssrc', '4265106', '-f', 'rtp', '-srtp_out_suite', 'AES_CM_128_HMAC_SHA1_80', '-srtp_out_params', 'R1IzVHfcmj5WQEaC4cw67HlAlXuilvkWD/ShsiJW', 'srtp://192.168.1.28:62585?rtcpport=62585&localrtcpport=62585&pkt_size=188']
         # self.ffmpeg_lastCommand = democall
         self.logger.info(u"{0:=^130}".format(" Run Ffmpeg Command "))
-        self.logger.info("This will rerun the last ffmpeg command so that output can be checked for errors and reviewed.")
-        self.logger.info("If you haven't opened converted a file.  It may freeeze and need plugin to be restarted....")
+        self.logger.info("This will rerun the last ffmpeg video command so that output can be checked for errors and reviewed.")
+        self.logger.info("If you haven't opened a stream it will be blank.  It may freeeze and need plugin to be restarted....")
         self.logger.info("It will try for 15 seconds, any longer and something is up....")
         self.logger.info("Command List to run :")
         self.logger.info("{}".format(self.ffmpeg_lastCommand))
-        self.logger.info(f"Terminal Command Equivalent (Can copy paste to terminal to try again):\n '{self.ffmpeg_lastCommand[0]}' {self.ffmpeg_lastCommand[1]} {self.ffmpeg_lastCommand[2]} '{self.ffmpeg_lastCommand[3]}' '{self.ffmpeg_lastCommand[4]}'")
-
         if len(self.ffmpeg_lastCommand) == 0:
             self.logger.info("Seems like command empty ending.")
             return
@@ -1756,11 +1785,9 @@ class Plugin(indigo.PluginBase):
         except subprocess.TimeoutExpired as e:
             p1.kill()
             outs, errs = p1.communicate()
-            self.logger.warning("{}".format(outs))
-            self.logger.warning("{}".format(errs))
+        self.logger.info("{}".format(outs))
+        self.logger.warning("{}".format(errs))
 
-        self.logger.info("No Timeout: \n{}".format(outs))
-        self.logger.info("No TimeOut: Returned\n {}".format(errs))
         self.logger.info(u"{0:=^130}".format(" Run Ffmpeg Command Ended  "))
         self.logger.info(u"{0:=^130}".format(" Hopefully this provides some troubleshooting help  "))
     ########################################
@@ -1808,7 +1835,6 @@ class Plugin(indigo.PluginBase):
             mac = atv.device_info.mac
             model = atv.device_info.model
             identifier = atv.identifier
-
 
             self.logger.debug(f"Atv DeviceInfo:\n {atv.device_info.raw_model=}")
             self.logger.debug(f"\n{ip=}\n{name=}\n{mac=}\n{model=}\n{operating_system=}")

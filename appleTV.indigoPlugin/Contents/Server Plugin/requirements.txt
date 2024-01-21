@@ -1,2 +1,2 @@
-pyatv==0.13.4
+pyatv==0.14.5
 homekitlink_ffmpeg
