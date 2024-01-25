@@ -1836,6 +1836,7 @@ class Plugin(indigo.PluginBase):
             model = atv.device_info.model
             identifier = atv.identifier
 
+            self.logger.debug(f"ATV All Identifiers {atv.all_identifiers}")
             self.logger.debug(f"Atv DeviceInfo:\n {atv.device_info.raw_model=}")
             self.logger.debug(f"\n{ip=}\n{name=}\n{mac=}\n{model=}\n{operating_system=}")
 
