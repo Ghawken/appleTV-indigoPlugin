@@ -1178,7 +1178,6 @@ class Plugin(indigo.PluginBase):
 
         MAChome = os.path.expanduser("~") + "/"
         self.saveDirectory = MAChome + "Pictures/Indigo-appleTV/"
-
         self.speakPath = os.path.join(self.pluginprefDirectory, "speak")
 
         try:
