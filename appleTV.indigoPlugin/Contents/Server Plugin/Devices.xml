@@ -24,14 +24,23 @@
 		</Label>
     </Field>
 					<Field id="simpleSeparator321a3" type="separator"/>
-   		 <Field id="startPairing"
-				   type="button"
-				   tooltip="Click on this Access Account" >
+   		 <Field id="startPairing"   type="button"  tooltip="Click on this Access Account" >
 			<Title>Press</Title>
         <Label>Start Connection: </Label>
 				<CallbackMethod>startPairing</CallbackMethod>
 		</Field>
-
+			<Field id="simpleSeparator321a3a" type="separator"/>
+   		 <Field id="startPairing_overide"
+				   type="button"
+				   tooltip="Overide MAC Address" fontColor="red">
+			<Title>Press</Title>
+        	<Label>Force Connection to this IP: </Label>
+				<CallbackMethod>startPairing_override</CallbackMethod>
+		</Field>
+			<Field id="sLabel" type="label" fontSize="small" alignText="right">
+	<Label>Use this to update device if OS updates changes MAC Address.
+	</Label>
+	</Field>
 				<Field id="simpleSeparator133" type="separator"/>
 			<Field id="verficationcode"
 				   type="textfield"
@@ -60,7 +69,7 @@
 				<Label>MAC number</Label>
 			</Field>
 			<Field	  id="Model"	readonly="true"		fontColor="grey"  type="textfield" >
-				<Label>Mode/SW</Label>
+				<Label>Model/SW</Label>
 			</Field>
 			<Field	  id="Identifier"	readonly="true"	fontColor="grey"	  type="textfield" >
 				<Label>Identifier</Label>

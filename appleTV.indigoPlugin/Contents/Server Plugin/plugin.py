@@ -912,6 +912,11 @@ class Plugin(indigo.PluginBase):
                 device.updateStateOnServer(key="status", value="Starting Up")
                 device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
                 identifier = device.states["identifier"]
+                localPropsCopy = device.pluginProps
+                localPropsCopy["MAC"] = str(identifier)
+                localPropsCopy["Identifier"] = str(identifier)
+                device.replacePluginPropsOnServer(localPropsCopy)
+                self.logger.debug(f"LocalPropsCopy After: {localPropsCopy}")
                 credentials = device.ownerProps.get("credentials","")
                 if credentials != "" :
                     self.logger.info(f"{device.name} Device has been Setup, attempting to connect.")
@@ -947,9 +952,26 @@ class Plugin(indigo.PluginBase):
         ipaddress = device.states['ip']
         if self.validate_ip_address(ipaddress):
         # get all atvs
-            self._event_loop.create_task(self.return_MatchedappleTVs(identifier, devicename, ipaddress))
+            self._event_loop.create_task(self.return_MatchedappleTVs(identifier, devicename, ipaddress, False, dev_id))
         else:
-            self._event_loop.create_task(self.return_MatchedappleTVs(identifier, devicename, "UNKNOWN"))
+            self._event_loop.create_task(self.return_MatchedappleTVs(identifier, devicename, "UNKNOWN", False, dev_id))
+        self.logger.info("Scanning for Devices")
+
+    def startPairing_override(self, valuesDict, type_id="", dev_id=None):
+        self.logger.debug(u'Force Connection Pairing Button pressed Called.')
+
+       # self.logger.debug(f"valueDict {valuesDict}\n, type_id {type_id}, and dev_id {dev_id}")
+        self._appleTVpairing  = None
+        device = indigo.devices[dev_id]
+        devicename = device.name
+        identifier = device.states['identifier']
+        ipaddress = device.states['ip']
+        if self.validate_ip_address(ipaddress):
+        # get all atvs
+            self._event_loop.create_task(self.return_MatchedappleTVs(identifier, devicename, ipaddress, True, dev_id))
+        else:
+            self.logger.info("IP Address is not set for this device.  Must use Start Connection button first.")
+            return
         self.logger.info("Scanning for Devices")
 
     async def two_pairing(self, identifier, pincode):
@@ -1685,7 +1707,7 @@ class Plugin(indigo.PluginBase):
                     self._event_loop.create_task(self.no_pairing_needed(atv))
                     return
 
-    async def return_MatchedappleTVs(self, identifier, devicename, ipaddress):
+    async def return_MatchedappleTVs(self, identifier, devicename, ipaddress, force_to_ip_address, device_id):
         self.logger.debug("Returning all ATVS")
         if ipaddress !="UNKNOWN":
             atvs = await pyatv.scan(self._event_loop, hosts=[ipaddress], timeout=90)
@@ -1695,13 +1717,42 @@ class Plugin(indigo.PluginBase):
             self.logger.info("This deivce was not found.  Try power cycling and try again.")
             return None
         else:
+            dev = indigo.devices[device_id]
             self.logger.debug(f"atvs {atvs}")
             for atv in atvs:
                 self.logger.debug(f"Device Identifer: {identifier}  && appleTV {atv.identifier}")
-                if identifier == str(atv.identifier):
+                attributes = ', '.join(
+                    f"{attr}={getattr(atv, attr)}"
+                    for attr in dir(atv)
+                    if not attr.startswith('_') and not callable(getattr(atv, attr))
+                )
+                self.logger.debug(f"ATV properties: {attributes}")
+                if identifier == str(atv.identifier) and force_to_ip_address == False:
                     self.logger.debug(f"Found Matching Device {atv.identifier}, start Pairing.")
                     self._event_loop.create_task(self.one_pairing(atv, devicename))
                     return
+                elif identifier == str(atv.identifier) and force_to_ip_address:
+                    self.logger.debug(f"Found Matching Device {atv.identifier}, start Pairing.  Force Enabled Updated.")
+                    dev.updateStateOnServer(key="MAC", value=str(atv.identifier))
+                    dev.updateStateOnServer(key="identifier", value=str(atv.identifier))
+                   # localPropsCopy = dev.pluginProps
+                    #1self.logger.debug(f"LocalPropsCopy Before: {localPropsCopy}")
+                    #localPropsCopy["MAC"] = str(atv.identifier)
+                    #localPropsCopy["Identifier"] = str(atv.identifier)
+
+                    #dev.replacePluginPropsOnServer(localPropsCopy)
+                    #self.logger.debug(f"LocalPropsCopy After: {localPropsCopy}")
+                    self._event_loop.create_task(self.one_pairing(atv, devicename))
+                    return
+                elif str(atv.address) == str(ipaddress) and force_to_ip_address:
+                    self.logger.debug(f"Found Matching Device with IP address {atv.address}, start Pairing.")
+                    self.logger.info(f"Found existing device with a different MAC Address, updating this MAC Address to current IP Address and Pairing.")
+                    dev.updateStateOnServer(key="MAC", value=str(atv.identifier))
+                    dev.updateStateOnServer(key="identifier", value=str(atv.identifier))
+
+                    self._event_loop.create_task(self.one_pairing(atv, devicename))
+                    return
+
     ########################################
     # Relay / Dimmer Action callback
     ######################
