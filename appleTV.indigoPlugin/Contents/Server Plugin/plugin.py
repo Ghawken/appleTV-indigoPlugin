@@ -1852,9 +1852,22 @@ class Plugin(indigo.PluginBase):
     def Menu_scandevices(self, *args, **kwargs):
         self.logger.debug("Menu Scan Devices Called...")
         self.logger.info("Scanning for Apple TV devices for 60 seconds...")
-        self._event_loop.create_task(self.log_appletvs())
+        self._event_loop.create_task(self.log_appletvs(ipaddress="UNKNOWN"))
 
-    async def log_appletvs(self):
+    def Menu_scandevices_single(self, valuesDict, *args, **kwargs):
+        self.logger.debug("Menu Scan Devices Called...")
+        self.logger.debug(f"{valuesDict['ipaddress']}")
+        if self.validate_ip_address(str(valuesDict["ipaddress"]) ) :
+            appleTV = str(valuesDict["ipaddress"])
+        else:
+            self.logger.info("Please enter valid IP address")
+            return
+
+        self.logger.info(f"Scanning this IP address:{appleTV}")
+        self._event_loop.create_task(self.log_appletvs(ipaddress=appleTV))
+        return True
+
+    async def log_appletvs(self, ipaddress):
         """
         Asynchronous method to perform the Apple TV scan and log details.
         """
@@ -1863,12 +1876,19 @@ class Plugin(indigo.PluginBase):
             timeout = 60
             self.logger.debug("Starting pyatv.scan...")
 
+            if ipaddress != "UNKNOWN":
+                atvs = await pyatv.scan(self._event_loop, hosts=[ipaddress], timeout=60)
+            else:
+                atvs = await pyatv.scan(self._event_loop, timeout=60)
             # Perform the scan
-            atvs = await pyatv.scan(self._event_loop, timeout=timeout)
+            #atvs = await pyatv.scan(self._event_loop, timeout=timeout)
 
             # Check if any Apple TVs were found -
             if not atvs:
-                self.logger.info("No Apple TV devices were found.")
+                if ipaddress != "UNKNOWN":
+                    self.logger.info(f"No Apple TV devices were found on this IP address: {ipaddress}")
+                else:
+                    self.logger.info("No Apple TV devices were found on the network.")
                 return
 
             # Prepare a header for the output

@@ -33,4 +33,14 @@
         <CallbackMethod>Menu_scandevices</CallbackMethod>
     </MenuItem>
 
+    <MenuItem id="appletv-devices-one">
+        <Name>Scan single IP Address</Name>
+        <ConfigUI>
+            <Field id="ipaddress" type="textfield" defaultValue="">
+                <Label>IP Address:</Label>
+            </Field>
+        </ConfigUI>
+        <CallbackMethod>Menu_scandevices_single</CallbackMethod>
+    </MenuItem>
+
 </MenuItems>
