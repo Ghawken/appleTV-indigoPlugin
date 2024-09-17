@@ -1866,7 +1866,7 @@ class Plugin(indigo.PluginBase):
             # Perform the scan
             atvs = await pyatv.scan(self._event_loop, timeout=timeout)
 
-            # Check if any Apple TVs were found
+            # Check if any Apple TVs were found -
             if not atvs:
                 self.logger.info("No Apple TV devices were found.")
                 return
