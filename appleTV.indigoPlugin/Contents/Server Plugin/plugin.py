@@ -1485,6 +1485,39 @@ class Plugin(indigo.PluginBase):
         if foundDevice == False:
             self.logger.info("No command run.  The appleTV appears to have not been found.")
 
+    def force_ipaddress(self, valuesDict, typeId):
+
+        self.logger.debug(f"Force IP Address Called {valuesDict} & {typeId}")
+        props = valuesDict.props
+        self.logger.debug(f"Props equal: {props}")
+
+        if props["appleTV"] =="" or props["appleTV"]=="":
+            self.logger.info("No AppleTV selected.")
+            return
+        appleTVid = props["appleTV"]
+        ip_address = None
+        if props["ipaddress"] == "":
+                ip_address = None
+        else:
+            ip_address = props["ipaddress"]
+
+        if self.validate_ip_address(ip_address):
+            self.logger.info("Valid IP address found updating")
+        else:
+            self.logger.info("Please enter valid IP Address")
+
+        dev = indigo.devices[int(appleTVid)]
+        dev.updateStateOnServer("ip", ip_address)
+        localPropsCopy = dev.pluginProps
+        #self.logger.debug(f"LocalPropsCopy Before: {localPropsCopy}")
+        localPropsCopy["IP"] = str(ip_address)
+        dev.replacePluginPropsOnServer(localPropsCopy)
+        self.logger.debug(f"LocalPropsCopy After: {localPropsCopy}")
+        self.logger.info("Restarting Device")
+        indigo.device.enable(int(appleTVid), value=False)
+        self.sleep(1)
+        indigo.device.enable(int(appleTVid), value=True)
+
     def saveArtwork(self, valuesDict, typeId):
 
         self.logger.debug(f"saveArtwork Called {valuesDict} & {typeId}")

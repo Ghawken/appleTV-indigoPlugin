@@ -115,6 +115,29 @@ Will maintain aspect ratio and auto adjust Height.
 
         </ConfigUI>
     </Action>
+ <Action id="updateIP">
+        <Name>Manually Update IP Address</Name>
+        <CallbackMethod>force_ipaddress</CallbackMethod>
+        <ConfigUI>
+			<Field id="appleTV" type="menu" defaultValue="0" tooltip="select appleTV " dynamicReload="True">
+				 <List class="indigo.devices" filter="self.appleTV"/>
+				<Label>Select Apple Tv:</Label>
+                <CallbackMethod>menu_callback</CallbackMethod>
+			</Field>
+            <Field id="ipaddress" type="textfield" defaultValue="">
+                <Label>IP:</Label>
+            </Field>
+
+    <Field id="infoLabel1a00" type="label" fontSize='large' fontColor="blue">
+        <Label>
+Force Update of device to this IP Address to aid in re-using device if haven't used static IP addresses
+		</Label>
+    </Field>
+            <Field id="anothersimpleSeparator3ab3" type="separator"/>
+
+
+        </ConfigUI>
+    </Action>
 
 </Actions>
 
