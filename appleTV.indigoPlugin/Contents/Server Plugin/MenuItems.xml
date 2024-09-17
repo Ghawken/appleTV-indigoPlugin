@@ -28,4 +28,9 @@
         <CallbackMethod>Menu_runffmpeg</CallbackMethod>
     </MenuItem>
 
+            <MenuItem id="appletv-devices">
+        <Name>Scan for Devices and Log results</Name>
+        <CallbackMethod>Menu_scandevices</CallbackMethod>
+    </MenuItem>
+
 </MenuItems>

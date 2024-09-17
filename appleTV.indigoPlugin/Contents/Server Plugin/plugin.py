@@ -1849,6 +1849,76 @@ class Plugin(indigo.PluginBase):
             # ** IMPLEMENT ME **
             self.logger.info(f"sent \"{dev.name}\" status request")
 
+    def Menu_scandevices(self, *args, **kwargs):
+        self.logger.debug("Menu Scan Devices Called...")
+        self.logger.info("Scanning for Apple TV devices for 60 seconds...")
+        self._event_loop.create_task(self.log_appletvs())
+
+    async def log_appletvs(self):
+        """
+        Asynchronous method to perform the Apple TV scan and log details.
+        """
+        try:
+            # Set the scan timeout to 60 seconds
+            timeout = 60
+            self.logger.debug("Starting pyatv.scan...")
+
+            # Perform the scan
+            atvs = await pyatv.scan(self._event_loop, timeout=timeout)
+
+            # Check if any Apple TVs were found
+            if not atvs:
+                self.logger.info("No Apple TV devices were found.")
+                return
+
+            # Prepare a header for the output
+            header = f"{'Name':<25} {'IP Address':<15} {'Identifier':<20} {'Model':<30}"
+            self.logger.info(header)
+            self.logger.info('-' * len(header))
+
+            # Iterate through each discovered Apple TV and log details
+            for atv in atvs:
+                # Retrieve device name
+                name = atv.name or 'Unknown'
+
+                # Retrieve IP address
+                ip = str(atv.address) if atv.address else 'Unknown'
+
+                # Retrieve identifier
+                identifier = atv.identifier or 'Unknown'
+
+                # Try to get the model information
+                model = atv.device_info.raw_model or 'Unknown'
+
+                manufacturer = 'Unknown'
+                model_name = 'Unknown'
+                for service in atv.services:
+                    service_props = service.properties
+                    #self.logger.debug(f"Service properties for {name} ({ip}): {service_props}")
+                    if 'manufacturer' in service_props and service_props['manufacturer']:
+                        manufacturer = service_props['manufacturer']
+                    if 'model' in service_props and service_props['model']:
+                        model_name = service_props['model']
+                    # Continue the loop until both manufacturer and model_name are checked
+                    if manufacturer != 'Unknown' and model_name != 'Unknown':
+                        break  # Exit the loop only if both are found
+
+                # Construct the model string based on available information
+                if manufacturer != 'Unknown' and model_name != 'Unknown':
+                    model = f"{manufacturer} {model_name}".strip()
+                elif manufacturer != 'Unknown':
+                    model = manufacturer
+                elif model_name != 'Unknown':
+                    model = model_name
+
+                #self.logger.debug(f"Manufacturer: {manufacturer}, Model Name: {model_name}, Final Model: {model}")
+
+                # Format the output into aligned columns
+                self.logger.info(f"{name:<25} {ip:<15} {identifier:<20} {model:<30}")
+
+        except Exception as e:
+            self.logger.error(f"An error occurred during the Apple TV scan: {e}")
+
     def Menu_runffmpeg(self, *args, **kwargs):
         self.logger.debug("runffmpeg Called...")
         # democall = ['./ffmpeg/ffmpeg', '-rtsp_transport', 'tcp', '-probesize', '32', '-analyzeduration', '0', '-re', '-i', 'rtsp://test:DR7yhrheu5@192.168.1.208:801/Back1&stream=2&fps=15&kbps=299', '-map', '0:0', '-c:v', 'copy', '-preset', 'ultrafast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p', '-color_range', 'mpeg', '-f', 'rawvideo', '-r', '15', '-b:v', '299k', '-bufsize', '2392k', '-maxrate', '299k', '-payload_type', '99', '-ssrc', '3961695', '-f', 'rtp', '-srtp_out_suite', 'AES_CM_128_HMAC_SHA1_80', '-srtp_out_params', 'ztkVCV7ooxnJDDyucPR1pMwY9C38gkDd15OdxfLI', 'srtp://192.168.1.28:51243?rtcpport=51243&localrtcpport=51243&pkt_size=1316', '-map', '0:1?', '-vn', '-c:a', 'libfdk_aac', '-profile:a', 'aac_eld', '-flags', '+global_header', '-f', 'null', '-ac', '1', '-ar', '16k', '-b:a', '24k', '-bufsize', '96k', '-payload_type', '110', '-ssrc', '4265106', '-f', 'rtp', '-srtp_out_suite', 'AES_CM_128_HMAC_SHA1_80', '-srtp_out_params', 'R1IzVHfcmj5WQEaC4cw67HlAlXuilvkWD/ShsiJW', 'srtp://192.168.1.28:62585?rtcpport=62585&localrtcpport=62585&pkt_size=188']
