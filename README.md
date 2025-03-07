@@ -1,3 +1,19 @@
+# Update
+# Called appleTV plugin, but supports AirPlay2 devices (!)
+- Live reporting of current state/Playback/Pause and all actions of appleTV- HomePod Control
+- AirPlay 2 compatible Speakers
+- AirPlay 2 compatible Receivers
+
+Plus speech to these devices as needed/with variable and device substitution.
+Plus playback of URL and streams - Doorbell/Camera streams etc.
+
+![https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/appleTV.indigoPlugin/Contents/Resources/icon_small.png?raw=true](https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/appleTV.indigoPlugin/Contents/Resources/icon_small.png?raw=true)
+
+
+!
+##
+
+
 # AppleTV device, HomePod device and Airplay2 Speaker Plugin for Indigo
 
 ![https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/appleTV.indigoPlugin/Contents/Resources/icon_small.png?raw=true](https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/appleTV.indigoPlugin/Contents/Resources/icon_small.png?raw=true)
