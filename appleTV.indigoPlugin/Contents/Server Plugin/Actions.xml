@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <Actions>
-       <Action id="sendCommand">
+       <Action id="sendCommand" dynamicReload="True">
         <Name>Send command to Apple TV</Name>
         <CallbackMethod>sendRemoteCommand</CallbackMethod>
         <ConfigUI>
@@ -18,6 +18,12 @@
 			<Field id="args" type="textfield">
                 <Label>Optional Arguments:</Label>
             </Field>
+            <Field id="help_button" type="button" fontSize="large" fontColor="blue" tooltip="Click this button to show Help for Selected Command" dynamicReload="True">
+	    <Label>Current Command:</Label>
+	    <Title>Help to Log </Title>
+	    <CallbackMethod>help_button_pressed</CallbackMethod>
+</Field>
+
     <Field id="infoLabel100" type="label" fontSize='large' fontColor="blue">
         <Field id="sep7c" type="separator"/>
         <Label>
@@ -42,6 +48,9 @@
             2 - Shuffle Song level
 
 		</Label>
+    </Field>
+            <Field id="commandinfo" type="label" fontSize='large' fontColor="blue" dynamicReload="True">
+
     </Field>
             <Field id="anothersimpleSeparator3a3" type="separator"/>
 

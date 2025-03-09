@@ -207,10 +207,38 @@
 					<ControlPageLabel>currentlyPlaying_TotalTime</ControlPageLabel>
 				</State>
 
+			<State id="currentlyPlaying_ArtworkID">
+					<ValueType>String</ValueType>
+					<TriggerLabel>currentlyPlaying_ArtworkID</TriggerLabel>
+					<ControlPageLabel>currentlyPlaying_ArtworkID</ControlPageLabel>
+				</State>
+
 				<State id="currentlyPlaying_Repeat">
 					<ValueType>String</ValueType>
 					<TriggerLabel>currentlyPlaying_Repeat</TriggerLabel>
 					<ControlPageLabel>currentlyPlaying_Repeat</ControlPageLabel>
+				</State>
+
+			    <State id="currentlyPlaying_SeriesName">
+					<ValueType>String</ValueType>
+					<TriggerLabel>currentlyPlaying_SeriesName</TriggerLabel>
+					<ControlPageLabel>currentlyPlaying_SeriesName</ControlPageLabel>
+				</State>
+				<State id="currentlyPlaying_SeasonNumber">
+					<ValueType>String</ValueType>
+					<TriggerLabel>currentlyPlaying_SeasonNumber</TriggerLabel>
+					<ControlPageLabel>currentlyPlaying_SeasonNumber</ControlPageLabel>
+				</State>
+				<State id="currentlyPlaying_EpisodeNumber">
+					<ValueType>String</ValueType>
+					<TriggerLabel>currentlyPlaying_EpisodeNumber</TriggerLabel>
+					<ControlPageLabel>currentlyPlaying_EpisodeNumber</ControlPageLabel>
+				</State>
+
+			    <State id="currentlyPlaying_Identifier">
+					<ValueType>String</ValueType>
+					<TriggerLabel>currentlyPlaying_Identifier</TriggerLabel>
+					<ControlPageLabel>currentlyPlaying_Identifier</ControlPageLabel>
 				</State>
 
 				<State id="currentlyPlaying_Shuffle">

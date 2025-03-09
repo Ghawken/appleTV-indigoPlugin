@@ -44,6 +44,7 @@ from pyatv.const import (
     FeatureName,
     FeatureState,
     InputAction,
+    TouchAction,
     Protocol,
     RepeatState,
     ShuffleState,
@@ -396,21 +397,56 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
 
     def _extract_command_with_args(self, cmd):
         """Parse input command with arguments.
+
         Parses the input command in such a way that the user may
         provide additional argument to the command. The format used is this:
           command=arg1,arg2,arg3,...
         all the additional arguments are passed as arguments to the target
         method.
         """
+
+        def _typeparse(value):
+            # Special case where input is forced to be treated as a string by quoting
+            if isinstance(value, str) and value.startswith('"') and value.endswith('"'):
+                return value[1:-1]
+
+            try:
+                return int(value)
+            except ValueError:
+                return value
+
+        def _parse_args(cmd, args):
+            args = [_typeparse(x) for x in args]
+            if cmd == "set_shuffle":
+                return [ShuffleState(args[0])]
+            if cmd == "set_repeat":
+                return [RepeatState(args[0])]
+            if cmd in [
+                "up",
+                "down",
+                "left",
+                "right",
+                "select",
+                "menu",
+                "home",
+                "click",
+            ]:
+                return [pyatv.const.InputAction(args[0])]
+            if cmd == "set_volume":
+                return [float(args[0])]
+            if cmd == "action":
+                return [args[0], args[1], TouchAction(args[2])]
+            return args
+
         equal_sign = cmd.find("=")
         if equal_sign == -1:
             return cmd, []
 
         command = cmd[0:equal_sign]
         args = cmd[equal_sign + 1:].split(",")
-        return command, self._parse_args(command, args)
+        return command, _parse_args(command, args)
 
-    async def async_artwork_save(self, filename, width=None, height=None):
+    async def async_artwork_save(self, filename, width, height=None):
         """Download artwork and save it to artwork.png."""
         try:
             artwork = await self.atv.metadata.artwork(width=width, height=height)
@@ -433,6 +469,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
             if isinstance(self.atv, bool):
                 self.plugin.logger.info("Current AppleTV appears to be not connected.  Aborting Command.")
                 return
+
             ctrl = retrieve_commands(pyatv.interface.RemoteControl)
             metadata = retrieve_commands(pyatv.interface.Metadata)
             power = retrieve_commands(pyatv.interface.Power)
@@ -443,6 +480,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
             keyboard = retrieve_commands(pyatv.interface.Keyboard)
             apps = retrieve_commands(pyatv.interface.Apps)
             audio = retrieve_commands(pyatv.interface.Audio)
+            touch = retrieve_commands(pyatv.interface.TouchGestures)
             # Parse input command and argument from user
             cmd, cmd_args = self._extract_command_with_args(cmd)
            # cmd, cmd_args = cmd, self._parse_args(cmd, args)
@@ -484,6 +522,9 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
 
             if cmd in user_accounts:
                 return await self._exec_command(self.atv.user_accounts, cmd, True, *cmd_args)
+
+            if cmd in touch:
+                return await self._exec_command(self.atv.touch, cmd, True, *cmd_args)
 
             self.plugin.logger.error(f"Unknown command: {cmd}")
             return 1
@@ -551,11 +592,17 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         except:
             self.plugin.logger.exception("Error in send_command")
 
-    def save_artwork(self, filename, width, heigth,  **kwargs):
+    def save_artwork(self, filename, width, height, **kwargs):
         try:
             self.plugin.logger.debug(f"Within Save Artwork Filename: {filename}, width {width}")
-            self.loop.create_task(self.async_artwork_save(filename, width, None))
-        except:
+            try:
+                width_int = int(width)
+            except (ValueError, TypeError):
+                self.plugin.logger.debug(f"Unable to convert width '{width}' to integer. Using default sizing.")
+                width_int = 512
+
+            self.loop.create_task(self.async_artwork_save(filename, width_int, None))
+        except Exception:
             self.plugin.logger.exception("Error in save_Artwork")
 
     def playstatus_error(self, updater, exception: Exception) -> None:
@@ -658,16 +705,14 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                 if self.atv:
                     self.atv.listener = self
                     self.atv.push_updater.listener = self
-                    self.atv.push_updater.start()
-                    self.atv.power.listener =self
+
+                    self.atv.power.listener = self
                     self.atv.audio.listener = self
                     self.plugin.logger.debug("Push updater started")
+                    self.atv.push_updater.start()
                     device = indigo.devices[deviceid]
                     device.updateStateOnServer(key="status", value="Paired. Push Updating.")
                     self.plugin.logger.debug(f"New IP ADDRESS: {newipaddress}")
-                    #localPropsCopy = device.ownerProps
-                    #localPropsCopy["IP"] = "this is my IP:"+str(newipaddress)
-                    #device.replacePluginPropsOnServer(localPropsCopy)
                     if str(ipaddress) != str(newipaddress):
                         if self.validate_ip_address(newipaddress):
                             device.updateStateOnServer(key="ip", value=str(newipaddress))
@@ -686,7 +731,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                         else:
                             model = str(self.atv.device_info.model)
                         try:
-                            power =self.atv.power.power_state
+                            power = self.atv.power.power_state
                             self.plugin.logger.debug(f"Updating Power State.  Retrieved {power}")
                             self.powerstate_update(power, power)  # send old and new at statrtup
                         except:
@@ -879,14 +924,10 @@ class Plugin(indigo.PluginBase):
 
             self.forceAllDiscovery = valuesDict.get('forceDiscovery', False)
 
-            if self.debug3:
-                logging.getLogger("Plugin.HomeKit_pyHap").setLevel(logging.DEBUG)
-            else:
-                logging.getLogger("Plugin.HomeKit_pyHap").setLevel(logging.INFO)
-
             self.logger.debug(u"logLevel = " + str(self.logLevel))
             self.logger.debug(u"User prefs saved.")
             self.logger.debug(u"Debugging on (Level: {0})".format(self.logLevel))
+
             if self.debug1:
                 pyatv_logging = logging.getLogger("pyatv")
                 pyatv_logging.setLevel(logging.THREADDEBUG)
@@ -896,6 +937,7 @@ class Plugin(indigo.PluginBase):
                 pyatv_logging = logging.getLogger("pyatv")
                 pyatv_logging.setLevel(logging.INFO)
                 pyatv_logging.addHandler(self.plugin_file_handler)
+
 
         return True
 
@@ -1096,11 +1138,47 @@ class Plugin(indigo.PluginBase):
                         self._print_commands("\nPlaying", pyatv.interface.Playing)
                         self._print_commands("\nAirPlay", pyatv.interface.Stream)
                         self._print_commands("\nDevice Info", pyatv.interface.DeviceInfo)
+                        self._print_commands("\nKeyBoard", pyatv.interface.Keyboard)
                         self._print_commands("\nAudio", pyatv.interface.Audio)
+                        self._print_commands("\nUser Accounts", pyatv.interface.UserAccounts)
                         self._print_commands("\nApps", pyatv.interface.Apps)
+                        self._print_commands("\nTouch", pyatv.interface.TouchGestures)
+                        return
+                if foundDevice == False:
+                    self.logger.info("Device must be Paired and connected for this to function")
+                    return
+            elif action == "detailcommands":
+                foundDevice = False
+                for appletvManager in self.appleTVManagers:  ## will only show running devices.
+                    if int(appletvManager.device_ID) == int(deviceid):
+                        foundDevice = True
 
-                        ##
-                        #self.logger.error(f" Commands: \n {retrieve_commands(pyatv.interface.RemoteControl)}")
+                        self.logger.debug(f"Found correct AppleTV listener/manager. {appletvManager} and id {appletvManager.device_ID}")
+                        iface = [
+                            pyatv.interface.RemoteControl,
+                            pyatv.interface.Metadata,
+                            pyatv.interface.Keyboard,
+                            pyatv.interface.Audio,
+                            pyatv.interface.TouchGestures,
+                            pyatv.interface.Power,
+                            pyatv.interface.Apps,
+                            pyatv.interface.Playing,
+                            pyatv.interface.Stream,
+                            pyatv.interface.UserAccounts,
+                            pyatv.interface.DeviceInfo
+                        ]
+                        for cmd in iface:
+                            for key, value in cmd.__dict__.items():
+                                if key.startswith("_"):
+                                    continue
+                                if inspect.isfunction(value):
+                                    signature = inspect.signature(value)
+                                else:
+                                    signature = " (property)"
+
+                                self.logger.info(
+                                    f"\nCommand:{key}\n{signature}\n{inspect.getdoc(value)}"
+                                )
 
                         return
                 if foundDevice == False:
@@ -1123,12 +1201,18 @@ class Plugin(indigo.PluginBase):
 
     def _print_commands(self, title, api):
         cmd_list = retrieve_commands(api)
-        commands = " - " + "\n - ".join(
-            map(lambda x: x[0] + " - " + x[1], sorted(cmd_list.items()))
-        )
-        self.logger.info(f"{title} commands:\n{commands}\n")
+        formatted_lines = []
+        for command, description in sorted(cmd_list.items()):
+            # Split the description into separate lines.
+            desc_lines = description.splitlines()
+            # Join the first line with the indented subsequent lines (if any).
+            formatted_desc = "\n   ".join(desc_lines)
+            formatted_lines.append(f"{command} - {formatted_desc}")
+        # Add a dash prefix for each command line.
+        commands_str = " - " + "\n - ".join(formatted_lines)
+        self.logger.info(f"{title} commands:\n{commands_str}\n")
 
-#####################################################################
+    #####################################################################
 
 
 #####################################################################
@@ -1139,7 +1223,7 @@ class Plugin(indigo.PluginBase):
             self.logger.info("Discovering appleTV devices on network...")
             atvs = await pyatv.scan(self._event_loop, identifier=iden)
             if not atvs:
-                self.logger.info(f"This device idenity {iden} could no longer be found.")
+                self.logger.info(f"This device identity {iden} could no longer be found.")
                 return None
             else:
                 self.logger.debug(f"atvs {atvs}")
@@ -1305,6 +1389,7 @@ class Plugin(indigo.PluginBase):
             app_list = {}
             keyboard_list = {}
             useraccount_list = {}
+            touch_list = {}
 
             self.logger.debug(f"commandListGenerator called {values_dict}")
             if "appleTV" in values_dict:
@@ -1361,6 +1446,11 @@ class Plugin(indigo.PluginBase):
                             except:
                                 self.logger.exception("cmd_list exception")
                                 pass
+                            try:
+                                touch_list = retrieve_commands(pyatv.interface.TouchGestures)
+                            except:
+                                self.logger.exception("Touch Gesture exception")
+                                pass
                             self.logger.debug(f"cmd_list {cmd_list}")
                             state_list.append((-1, "%%disabled:Remote Commands:%%"))
                             for key,value in cmd_list.items():
@@ -1396,6 +1486,10 @@ class Plugin(indigo.PluginBase):
                                     state_list.append((key, value))
                             state_list.append((-1, "%%disabled:Keyboard Commands:%%"))
                             for key, value in keyboard_list.items():
+                                if not "DEPRECATED" in value:
+                                    state_list.append((key, value))
+                            state_list.append((-1, "%%disabled:Touch Commands:%%"))
+                            for key, value in touch_list.items():
                                 if not "DEPRECATED" in value:
                                     state_list.append((key, value))
                            # state_list =  list(cmd_list.items()) #[(v, k) for v, k in cmd_list.items()]
@@ -1647,6 +1741,7 @@ class Plugin(indigo.PluginBase):
             device = indigo.devices[deviceid]
             atv_appId = ""
             atv_app = None
+
             try:
                 if isAppleTV and atv.metadata.app !=None:
                     atv_app = atv.metadata.app.name
@@ -1658,6 +1753,16 @@ class Plugin(indigo.PluginBase):
             playingState = "Standby"
             if atv is None:
                 playingState = "Off"
+
+            currently_playing_identifier = f"{getattr(playstatus, 'content_identifier', 'Not available')}"
+            series_name = f"{getattr(self, 'series_name', 'Not available')}"
+            season_number = f"{getattr(self, 'season_number', 'Not available')}"
+            episode_number = f"{getattr(self, 'episode_number', 'Not available')}"
+            try:
+                artworkID = atv.metadata.artwork_id
+            except Exception as e:
+                self.plugin.logger.debug(f"Unable to retrieve artwork id: {e}")
+                artworkID = None  # or a safe fallback value such as an empty string
 
             if playstatus.device_state != None:
                 state = playstatus.device_state
@@ -1684,6 +1789,11 @@ class Plugin(indigo.PluginBase):
                 {'key': 'currentlyPlaying_Repeat', 'value': f"{playstatus.repeat}"},
                 {'key': 'currentlyPlaying_Shuffle', 'value': f"{playstatus.shuffle}"},
                 {'key': 'currentlyPlaying_Title', 'value': f"{playstatus.title}"},
+                {'key': 'currentlyPlaying_Identifier', 'value': f"{currently_playing_identifier}"},
+                {'key': 'currentlyPlaying_SeriesName', 'value': f"{series_name}"},
+                {'key': 'currentlyPlaying_SeasonNumber', 'value': f"{season_number}"},
+                {'key': 'currentlyPlaying_EpisodeNumber', 'value': f"{episode_number}"},
+                {'key': 'currentlyPlaying_ArtworkID', 'value': f"{artworkID}"},
                 {'key': 'currentlyPlaying_TotalTime', 'value': f"{playstatus.total_time}"},
                 {'key': 'currentlyPlaying_PlayState', 'value': f"{playingState}"}
 
@@ -1699,8 +1809,71 @@ class Plugin(indigo.PluginBase):
             if self.stopThread:
                 break
 
-    def menu_callback(self, valuesDict, *args, **kwargs):  # typeId, devId):
-        self.logger.debug(f"Menu callback: returning valuesDict: \n {valuesDict}")
+    def menu_callback(self, valuesDict, *args, **kwargs):
+        self.logger.debug(f"Menu callback: received valuesDict:\n{valuesDict}")
+        return valuesDict
+
+    def help_button_pressed(self, valuesDict, *args, **kwargs):
+
+        # Retrieve the command selected by the user
+        command_name = valuesDict.get("command", "").strip()
+        if not command_name:
+            self.logger.error("No command specified in valuesDict")
+            return valuesDict
+
+        # Define all the interfaces to search through
+        interfaces = [
+            pyatv.interface.RemoteControl,
+            pyatv.interface.Metadata,
+            pyatv.interface.Keyboard,
+            pyatv.interface.Audio,
+            pyatv.interface.TouchGestures,
+            pyatv.interface.Power,
+            pyatv.interface.Apps,
+            pyatv.interface.Playing,
+            pyatv.interface.Stream,
+            pyatv.interface.UserAccounts,
+            pyatv.interface.DeviceInfo
+        ]
+
+        details_list = []
+        # Iterate over each interface
+        for iface in interfaces:
+            # Check all attributes of the interface
+            for key, value in iface.__dict__.items():
+                if key.startswith("_"):
+                    continue
+                # Match command name case-insensitively
+                if key.lower() == command_name.lower():
+                    # Get signature if it's a function, otherwise mark as a property.
+                    if inspect.isfunction(value):
+                        try:
+                            signature = inspect.signature(value)
+                        except Exception:
+                            signature = "Signature not available"
+                    else:
+                        signature = " (property)"
+                    # Retrieve documentation if available.
+                    doc = inspect.getdoc(value) or "No documentation available."
+                    details = (
+                        f"Interface: {iface.__name__}\n"
+                        f"Command: {key}\n"
+                        f"Documentation: {doc}"
+                    )
+                    details_list.append(details)
+
+        # Combine details from all interfaces or return a not found message.
+        if details_list:
+            command_details = "\n\n".join(details_list)
+
+        else:
+            command_details = f"Command '{command_name}' not found in any known interfaces."
+        self.logger.info(f"\nHelp for Command: {command_name}\n{command_details}")
+        # Update the valuesDict with the command details
+        valuesDict["commandinfo"] = command_details
+
+        self.logger.debug(f"Updated valuesDict:\n{valuesDict}")
+
         return valuesDict
 
     def app_list_generator(self, filter="", values_dict=None, typeId="", targetId=0):
