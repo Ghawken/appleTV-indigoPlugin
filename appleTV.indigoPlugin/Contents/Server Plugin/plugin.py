@@ -1762,7 +1762,7 @@ class Plugin(indigo.PluginBase):
                 artworkID = atv.metadata.artwork_id
             except Exception as e:
                 self.logger.debug(f"Unable to retrieve artwork id: {e}")
-                artworkID = None  # oFixg
+                artworkID = None
 
             if playstatus.device_state != None:
                 state = playstatus.device_state

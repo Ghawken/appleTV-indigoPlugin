@@ -19,6 +19,7 @@
             <Field id="internallist" type="button">
                 <Label>Do:</Label>
                 <Title>Run Selected Method</Title>
+                <CallbackMethod>menu_actionRun</CallbackMethod>
             </Field>
         </ConfigUI>
     </MenuItem>
