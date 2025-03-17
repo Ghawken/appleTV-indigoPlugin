@@ -60,7 +60,7 @@ import subprocess
 import sys
 import os
 from os import path
-
+import shutil
 
 from homekitlink_ffmpeg import get_ffmpeg_binary
 
@@ -455,7 +455,11 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                     file.write(artwork.bytes)
                     self.plugin.logger.debug(f"Artwork Downloaded , mimetype {artwork.mimetype}")
             else:
-                self.plugin.logger.info("No artwork is currently available.")
+                # Build the path to the default image using the pluginPath.
+                default_image_path = os.path.join(self.plugin.pluginPath, "images", "appletv-thumb.png")
+                # Copy the default image to the target filename.
+                shutil.copy(default_image_path, filename)
+                self.plugin.logger.info("No artwork available. Default image copied.")
         except:
             self.plugin.logger.exception("async artwork save exception")
 
@@ -1621,6 +1625,8 @@ class Plugin(indigo.PluginBase):
         if props["appleTV"] =="" or props["appleTV"]=="":
             self.logger.info("No AppleTV selected.")
             return
+
+        #self.logger.error(f"{self.pluginPath}")
 
         width = None
         if props["width"] == "":
