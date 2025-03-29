@@ -291,8 +291,31 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                 device.updateStateOnServer("PowerState","On")
                 device.updateStateImageOnServer(indigo.kStateImageSel.PowerOn)
             elif new_state == pyatv.const.PowerState.Off:
+                stateList = [
+                    {'key': 'currentlyPlaying_AppId', 'value': f""},
+                    {'key': 'currentlyPlaying_App', 'value': f""},
+                    {'key': 'currentlyPlaying_Artist', 'value': ""},
+                    {'key': 'currentlyPlaying_Album', 'value': f""},
+                    {'key': 'currentlyPlaying_DeviceState', 'value': f"{pyatv.const.DeviceState.Idle}"},
+                    {'key': 'currentlyPlaying_Genre', 'value': f""},
+                    {'key': 'currentlyPlaying_MediaType', 'value': f""},
+                    {'key': 'currentlyPlaying_Position', 'value': f""},
+                    {'key': 'currentlyPlaying_Title', 'value': f""},
+                    {'key': 'currentlyPlaying_Identifier', 'value': f""},
+                    {'key': 'currentlyPlaying_SeriesName', 'value': f""},
+                    {'key': 'currentlyPlaying_SeasonNumber', 'value': f""},
+                    {'key': 'currentlyPlaying_EpisodeNumber', 'value': f""},
+                    {'key': 'currentlyPlaying_ArtworkID', 'value': f""},
+                    {'key': 'currentlyPlaying_TotalTime', 'value': f""},
+                    {'key': 'currentlyPlaying_PlayState', 'value': f""}
+
+                ]
+                device.updateStatesOnServer(stateList)
+
+
                 device.updateStateOnServer("onOffState", False)
                 device.updateStateOnServer("PowerState", "Idle")
+
                 device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
         except:
             self.plugin.logger.debug("Exception in Powerstate Update",exc_info=True)
@@ -450,13 +473,15 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         """Download artwork and save it to artwork.png."""
         try:
             artwork = await self.atv.metadata.artwork(width=width, height=height)
-            if artwork is not None:
+            artworkID = self.atv.metadata.artwork_id
+            self.plugin.logger.debug(f"{artworkID=}")
+            if artwork is not None and artworkID is not None:
                 with open(filename, "wb") as file:
                     file.write(artwork.bytes)
                     self.plugin.logger.debug(f"Artwork Downloaded , mimetype {artwork.mimetype}")
             else:
                 # Build the path to the default image using the pluginPath.
-                default_image_path = os.path.join(self.plugin.pluginPath, "images", "appletv-thumb.png")
+                default_image_path = os.path.join(self.plugin.pluginPath, "images", "apple-tv-animate.png")
                 # Copy the default image to the target filename.
                 shutil.copy(default_image_path, filename)
                 self.plugin.logger.info("No artwork available. Default image copied.")
@@ -1621,13 +1646,10 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(f"saveArtwork Called {valuesDict} & {typeId}")
         props = valuesDict.props
         self.logger.debug(f"Props equal: {props}")
-
         if props["appleTV"] =="" or props["appleTV"]=="":
             self.logger.info("No AppleTV selected.")
             return
-
         #self.logger.error(f"{self.pluginPath}")
-
         width = None
         if props["width"] == "":
                 width = None
@@ -1642,7 +1664,6 @@ class Plugin(indigo.PluginBase):
         self.logger.info(f"Saving current Artwork Width= {width} to appleTV Device ID {appleTVid}")
         foundDevice = False
         for appletvManager in self.appleTVManagers:
-
             if int(appletvManager.device_ID) == int(appleTVid):
                 foundDevice = True
                 self.logger.debug(f"Found correct AppleTV listener/manager. {appletvManager} and id {appletvManager.device_ID}")
