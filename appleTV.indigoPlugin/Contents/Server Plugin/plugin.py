@@ -487,19 +487,19 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                     self.plugin.logger.debug(f"Artwork Downloaded , mimetype {artwork.mimetype}")
             else:
                 # Set the default image path to the thumbnail.
-                default_image_path = os.path.join(self.plugin.pluginPath, "images", "apple-thumbnail.png")
+                # default_image_path = os.path.join(self.plugin.pluginPath, "images", "apple-thumbnail.png")
 
                 # Check if playstatus exists and is not None.
-                playstatus = getattr(self.atv, "playstatus", None)
-                if playstatus is not None:
+                #playstatus = getattr(self.atv, "playstatus", None)
+                #if playstatus is not None:
                     # Attempt to safely get device_state.
-                    device_state = getattr(playstatus, "device_state", None)
-                    if device_state in (pyatv.const.DeviceState.Playing, pyatv.const.DeviceState.Paused):
-                        default_image_path = os.path.join(self.plugin.pluginPath, "images", "apple-tv-animate.png")
+                    #device_state = getattr(playstatus, "device_state", None)
+                    #if device_state in (pyatv.const.DeviceState.Playing, pyatv.const.DeviceState.Paused):
+                default_image_path = os.path.join(self.plugin.pluginPath, "images", "apple-tv-animate.png")
 
                 # Copy the default image to the target filename.
                 shutil.copy(default_image_path, filename)
-                self.plugin.logger.info("No artwork available. Default image copied.")
+                self.plugin.logger.info("No artwork available. Default image used.")
 
 
         except:
