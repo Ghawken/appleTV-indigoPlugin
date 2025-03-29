@@ -472,6 +472,12 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
     async def async_artwork_save(self, filename, width, height=None):
         """Download artwork and save it to artwork.png."""
         try:
+            if self.atv == None:
+                self.plugin.logger.info("No AppleTV exists.  ?Disconnected.  Aborted Artwork save.")
+                return
+            if self.atv.metadata == None:
+                self.plugin.logger.debug("No Metadata available.  Aborted.")
+                return
             artwork = await self.atv.metadata.artwork(width=width, height=height)
             artworkID = self.atv.metadata.artwork_id
             self.plugin.logger.debug(f"{artworkID=}")
@@ -480,11 +486,22 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                     file.write(artwork.bytes)
                     self.plugin.logger.debug(f"Artwork Downloaded , mimetype {artwork.mimetype}")
             else:
-                # Build the path to the default image using the pluginPath.
-                default_image_path = os.path.join(self.plugin.pluginPath, "images", "apple-tv-animate.png")
+                # Set the default image path to the thumbnail.
+                default_image_path = os.path.join(self.plugin.pluginPath, "images", "apple-thumbnail.png")
+
+                # Check if playstatus exists and is not None.
+                playstatus = getattr(self.atv, "playstatus", None)
+                if playstatus is not None:
+                    # Attempt to safely get device_state.
+                    device_state = getattr(playstatus, "device_state", None)
+                    if device_state in (pyatv.const.DeviceState.Playing, pyatv.const.DeviceState.Paused):
+                        default_image_path = os.path.join(self.plugin.pluginPath, "images", "apple-tv-animate.png")
+
                 # Copy the default image to the target filename.
                 shutil.copy(default_image_path, filename)
                 self.plugin.logger.info("No artwork available. Default image copied.")
+
+
         except:
             self.plugin.logger.exception("async artwork save exception")
 
