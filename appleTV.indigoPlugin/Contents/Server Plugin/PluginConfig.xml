@@ -68,9 +68,9 @@ If you cannot connect to your device, try power cycling it first, or allocate it
         <Description>1. Debug pyatv Library (Verbose) [File Only]</Description>
     </Field>
 
-    <Field id="debug2" type="checkbox" hidden="True" tooltip="Enabling will result in .">
+    <Field id="debug2" type="checkbox" hidden="False" tooltip="Enabling will result in .">
         <Label/>
-        <Description>2. Debug 2</Description>
+        <Description>2. Debug Artwork</Description>
     </Field>
 
     <Field id="debug3" type="checkbox" hidden="True"  tooltip="Enabling will result .">

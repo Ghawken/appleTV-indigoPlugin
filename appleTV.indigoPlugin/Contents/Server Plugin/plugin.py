@@ -170,6 +170,8 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         self.isHomePod = thisisHomePod
         self.loop = loop
         self.atv_config = atv_config
+        self.current_artworkid = ""
+        self.last_artworkid = ""
         self.devicename = devicename
         self._app_list = None
         self.all_features = None
@@ -282,10 +284,12 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
             self.loop.create_task(self.atv.power.turn_off())
 
 
+
     def powerstate_update( self, old_state, new_state  ):
         try:
             self.plugin.logger.debug(f"{self.devicename} Powerstate update Old {old_state} and new {new_state}")
             device = indigo.devices[self.deviceid]
+
             if new_state == pyatv.const.PowerState.On:
                 device.updateStateOnServer("onOffState", True)
                 device.updateStateOnServer("PowerState","On")
@@ -311,14 +315,60 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
 
                 ]
                 device.updateStatesOnServer(stateList)
-
-
                 device.updateStateOnServer("onOffState", False)
                 device.updateStateOnServer("PowerState", "Idle")
-
                 device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
+
+            ##
+            # Checking whether Artwork needs to be updated
+            self.update_artwork_for_device(device)
+
         except:
             self.plugin.logger.debug("Exception in Powerstate Update",exc_info=True)
+
+    def update_artwork_for_device(self, device):
+        """
+        Update the saved artwork for the given device.
+
+        This function retrieves plugin properties from the device to determine
+        if an artwork update is forced and the desired artwork width. If an update
+        is requested, it schedules the asynchronous artwork save task.
+
+        Parameters:
+            self: The current instance containing plugin, loop, and other attributes.
+            device: The device object containing 'pluginProps' with artwork settings.
+        """
+        try:
+            if self.plugin.debug2:
+                self.plugin.logger.debug("Checking for whether Saved Artwork should be updated")
+
+            # Retrieve artwork update flag and width from the device's properties.
+            artwork_update = device.pluginProps.get("artwork_update", False)
+            if self.plugin.debug2:
+                self.plugin.logger.debug(f"Artwork Update Forced {artwork_update}")
+
+            artwork_width = device.pluginProps.get("artwork_width", 512)
+            try:
+                width_int = int(artwork_width)
+            except (ValueError, TypeError):
+                if self.plugin.debug2:
+                    self.plugin.logger.debug(f"Unable to convert width '{artwork_width}' to integer. Using default sizing.")
+                width_int = 512
+
+            # Build the filename for the artwork file.
+            filename = f"{self.plugin.saveDirectory}/{self.devicename}_Artwork.png"
+
+            if artwork_update:
+                if self.plugin.debug2:
+                    self.plugin.logger.debug("Updating Artwork as playstate changed and forced update selected.")
+                # Schedule the asynchronous artwork save task without blocking.
+                self.loop.create_task(self.async_artwork_save(filename, width_int, None))
+
+        except Exception:
+            if self.plugin.debug2:
+                self.plugin.logger.exception("Exception in update_artwork_for_device")
+            else:
+                self.plugin.logger.debug("Exception in update_artwork_for_device", exc_info=True)
 
 
     def _handle_disconnect(self):
@@ -368,6 +418,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         try:
             self.plugin.logger.debug(f"Playstatus Update Called for {self.devicename}")
             self.plugin.logger.debug(f"& PlayStatus\n {playstatus}")
+
             try:
                 self.task.cancel()
             except:
@@ -382,6 +433,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                     self.isAppleTV
                 )
             )
+            self.update_artwork_for_device(indigo.devices[self.deviceid])
         except:
             self.plugin.logger.exception("playstatus update exception:")
 
@@ -473,37 +525,45 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         """Download artwork and save it to artwork.png."""
         try:
             if self.atv == None:
-                self.plugin.logger.info("No AppleTV exists.  ?Disconnected.  Aborted Artwork save.")
+                if self.plugin.debug2:
+                    self.plugin.logger.info("No AppleTV exists.  ?Disconnected.  Aborted Artwork save.")
                 return
             if self.atv.metadata == None:
-                self.plugin.logger.debug("No Metadata available.  Aborted.")
+                if self.plugin.debug2:
+                    self.plugin.logger.debug("No Metadata available.  Aborted.")
                 return
             artwork = await self.atv.metadata.artwork(width=width, height=height)
             artworkID = self.atv.metadata.artwork_id
-            self.plugin.logger.debug(f"{artworkID=}")
+            self.current_artworkid = artworkID
+            if self.plugin.debug2:
+                self.plugin.logger.debug(f"\n{artworkID=}\n{self.current_artworkid=}\n{self.last_artworkid=}")
+
             if artwork is not None and artworkID is not None:
-                with open(filename, "wb") as file:
-                    file.write(artwork.bytes)
-                    self.plugin.logger.debug(f"Artwork Downloaded , mimetype {artwork.mimetype}")
+                if self.last_artworkid != self.current_artworkid:
+                    with open(filename, "wb") as file:
+                        file.write(artwork.bytes)
+                        if self.plugin.debug2:
+                            self.plugin.logger.debug(f"Artwork Downloaded , mimetype {artwork.mimetype}")
+                        self.last_artworkid = artworkID
+                else:
+                    if self.plugin.debug2:
+                        self.plugin.logger.debug(f"Artwork unchanged skipping")
             else:
-                # Set the default image path to the thumbnail.
-                # default_image_path = os.path.join(self.plugin.pluginPath, "images", "apple-thumbnail.png")
-
-                # Check if playstatus exists and is not None.
-                #playstatus = getattr(self.atv, "playstatus", None)
-                #if playstatus is not None:
-                    # Attempt to safely get device_state.
-                    #device_state = getattr(playstatus, "device_state", None)
-                    #if device_state in (pyatv.const.DeviceState.Playing, pyatv.const.DeviceState.Paused):
-                default_image_path = os.path.join(self.plugin.pluginPath, "images", "apple-tv-animate.png")
-
-                # Copy the default image to the target filename.
-                shutil.copy(default_image_path, filename)
-                self.plugin.logger.info("No artwork available. Default image used.")
-
-
+                # 2) Copy from self.saveDirectory to the target `filename`.
+                if self.last_artworkid != "Default_Image":
+                    copied_image_path = os.path.join(self.plugin.saveDirectory, "apple-tv-default-thumb.png")
+                    shutil.copy(copied_image_path, filename)
+                    if self.plugin.debug2:
+                        self.plugin.logger.debug("No artwork available. Default image used.")
+                    self.last_artworkid = "Default_Image"
+                else:
+                    if self.plugin.debug2:
+                        self.plugin.logger.debug(f"Artwork unchanged skipping")
         except:
-            self.plugin.logger.exception("async artwork save exception")
+            if self.plugin.debug2:
+                self.plugin.logger.exception("async artwork save exception", exc_info=True)
+            else:
+                self.plugin.logger.debug("async artwork save exception", exc_info=True)
 
     async def _handle_device_command(self, args, cmd ):
         try:
@@ -944,7 +1004,26 @@ class Plugin(indigo.PluginBase):
         # except:
         #     pass
 
+    def copy_default_image_to_pictures(self):
+        """
+        Copy the default plugin image to the user's 'Pictures'-like directory
+        (self.saveDirectory) only if it does not already exist.
+        """
+        try:
+            # Path to the default image inside the plugin folder:
+            default_image_path = os.path.join(self.pluginPath, "images", "apple-tv-default-thumb.png")
+            # Desired path in your "Pictures"/Documents/Indigo-appleTV folder:
+            # (self.saveDirectory was set to something like "~/Documents/Indigo-appleTV/")
+            target_image_path = os.path.join(self.saveDirectory, "apple-tv-default-thumb.png")
 
+            # Only copy if the file doesn't already exist.
+            if not os.path.exists(target_image_path):
+                shutil.copy(default_image_path, target_image_path)
+                self.logger.debug(f"Default image copied to {target_image_path}")
+            else:
+                self.logger.debug(f"Default image already exists in {target_image_path}")
+        except Exception:
+            self.logger.debug("Error copying default image to Pictures directory.", exc_info=True)
 
     def closedPrefsConfigUi(self, valuesDict, userCancelled):
         self.debugLog(u"closedPrefsConfigUi() method called.")
@@ -1346,6 +1425,7 @@ class Plugin(indigo.PluginBase):
             self.logger.error(u'Error Accessing Save and Peak Directory. ')
             pass
 
+        self.copy_default_image_to_pictures()
 
     def shutdown(self):
         self.logger.info("Shutting down Plugin")

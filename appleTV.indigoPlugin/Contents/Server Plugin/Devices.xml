@@ -56,7 +56,25 @@
         <Label>Submit PinCode (if requested)</Label>
 				<CallbackMethod>submitCode</CallbackMethod>
 		</Field>
-				<Field id="simpleSeparator1233" type="separator"/>
+			<Field id="simpleSeparator1233" type="separator"/>
+			  <Field id="infoLabel22" type="label" fontSize='large' fontColor="blue">
+        		<Label>Device Artwork Settings:</Label>
+    			</Field>
+			<Field id="artwork_update"
+				   type="checkbox"
+				   tooltip="Automatically Download artwork if status changes"
+				   defaultValue="false"   >
+				<Label>Auto Save Artwork:</Label>
+			</Field>
+						<Field id="artwork_width"
+				   type="textfield"
+				   tooltip="Enter Default Width"
+				   defaultValue="512"   >
+				<Label>Default Width for Artwork:</Label>
+			</Field>
+			        <Field id="sep7e" type="separator"/>
+
+
 			<Field	  id="Name"		readonly="true"	fontColor="grey"  type="textfield">
 				<Label>Name</Label>
 			</Field>
@@ -77,6 +95,9 @@
 			<Field	  id="credentials"	readonly="true"	fontColor="grey"	  type="textfield" >
 				<Label>Pairing Credentials</Label>
 			</Field>
+			        <Field id="sep7d" type="separator"/>
+
+
 		</ConfigUI>
 
 
