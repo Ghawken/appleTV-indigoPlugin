@@ -326,7 +326,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         except:
             self.plugin.logger.debug("Exception in Powerstate Update",exc_info=True)
 
-    def update_artwork_for_device(self, device):
+    def update_artwork_for_device(self, device, playstatus=None):
         """
         Update the saved artwork for the given device.
 
@@ -362,7 +362,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                 if self.plugin.debug2:
                     self.plugin.logger.debug("Updating Artwork as playstate changed and forced update selected.")
                 # Schedule the asynchronous artwork save task without blocking.
-                self.loop.create_task(self.async_artwork_save(filename, width_int, None))
+                self.loop.create_task(self.async_artwork_save(filename, width_int, None, playstatus=playstatus))
 
         except Exception:
             if self.plugin.debug2:
@@ -433,7 +433,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                     self.isAppleTV
                 )
             )
-            self.update_artwork_for_device(indigo.devices[self.deviceid])
+            self.update_artwork_for_device(indigo.devices[self.deviceid], playstatus)
         except:
             self.plugin.logger.exception("playstatus update exception:")
 
@@ -521,45 +521,84 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         args = cmd[equal_sign + 1:].split(",")
         return command, _parse_args(command, args)
 
-    async def async_artwork_save(self, filename, width, height=None):
-        """Download artwork and save it to artwork.png."""
+    async def async_artwork_save(self, filename, width, height=None, playstatus=None):
+        """
+        Download artwork and save it to filename.
+
+        If artwork is available and its id differs from the last one saved, save the new artwork.
+        Otherwise, use a default image.
+
+        If 'playstatus' is provided and its device_state is set, then use a different default
+        image based on whether the device is Playing or Paused. Otherwise, fallback to the generic default.
+
+        Parameters:
+            filename (str): Target file path for saving the artwork.
+            width (int): Artwork width to request.
+            height (int, optional): Artwork height to request.
+            playstatus (optional): Object with a device_state attribute.
+        """
         try:
-            if self.atv == None:
+            # Check if AppleTV object and metadata exist
+            if self.atv is None:
                 if self.plugin.debug2:
-                    self.plugin.logger.info("No AppleTV exists.  ?Disconnected.  Aborted Artwork save.")
+                    self.plugin.logger.info("No AppleTV exists. ?Disconnected. Aborted Artwork save.")
                 return
-            if self.atv.metadata == None:
+            if self.atv.metadata is None:
                 if self.plugin.debug2:
-                    self.plugin.logger.debug("No Metadata available.  Aborted.")
+                    self.plugin.logger.debug("No Metadata available. Aborted.")
                 return
+
+            # Attempt to get the artwork from the device
             artwork = await self.atv.metadata.artwork(width=width, height=height)
             artworkID = self.atv.metadata.artwork_id
             self.current_artworkid = artworkID
-            if self.plugin.debug2:
-                self.plugin.logger.debug(f"\n{artworkID=}\n{self.current_artworkid=}\n{self.last_artworkid=}")
 
+            if self.plugin.debug2:
+                self.plugin.logger.debug(
+                    f"artworkID={artworkID}, current_artworkid={self.current_artworkid}, last_artworkid={self.last_artworkid}")
+
+            # If artwork is available, write it if it has changed.
             if artwork is not None and artworkID is not None:
                 if self.last_artworkid != self.current_artworkid:
                     with open(filename, "wb") as file:
                         file.write(artwork.bytes)
-                        if self.plugin.debug2:
-                            self.plugin.logger.debug(f"Artwork Downloaded , mimetype {artwork.mimetype}")
-                        self.last_artworkid = artworkID
+                    if self.plugin.debug2:
+                        self.plugin.logger.debug(f"Artwork Downloaded, mimetype {artwork.mimetype}")
+                    self.last_artworkid = artworkID
                 else:
                     if self.plugin.debug2:
-                        self.plugin.logger.debug(f"Artwork unchanged skipping")
+                        self.plugin.logger.debug("Artwork unchanged, skipping update.")
             else:
-                # 2) Copy from self.saveDirectory to the target `filename`.
-                if self.last_artworkid != "Default_Image":
-                    copied_image_path = os.path.join(self.plugin.saveDirectory, "apple-tv-default-thumb.png")
+                # No valid artwork; use a fallback default image.
+                # Determine the fallback image and its ID based on playstatus.
+                fallback_default = "apple-tv-default-thumb-nothing.png"
+                default_artwork_id = "Default_Image"
+                if playstatus is not None and getattr(playstatus, "device_state", None) is not None:
+                    state = playstatus.device_state
+                    self.plugin.logger.debug(f"{playstatus.device_state=}, {state=}")
+                    # You may need to adjust these comparisons based on your pyatv API/constants.
+                    if state == pyatv.const.DeviceState.Playing:
+                        fallback_default = "apple-tv-default-thumb-playing.png"
+                        default_artwork_id = "Default_Image_Playing"
+                    elif state == pyatv.const.DeviceState.Paused:
+                        fallback_default = "apple-tv-default-thumb-paused.png"
+                        default_artwork_id = "Default_Image_Paused"
+                    else:
+                        fallback_default = "apple-tv-default-thumb-nothing.png"
+                        default_artwork_id = "Default_Image"
+
+                # Only copy if we haven't already used this default image for the current state.
+                if self.last_artworkid != default_artwork_id:
+                    copied_image_path = os.path.join(self.plugin.saveDirectory, fallback_default)
                     shutil.copy(copied_image_path, filename)
                     if self.plugin.debug2:
+                        self.plugin.logger.debug(f"{fallback_default} copied to {copied_image_path}")
                         self.plugin.logger.debug("No artwork available. Default image used.")
-                    self.last_artworkid = "Default_Image"
+                    self.last_artworkid = default_artwork_id
                 else:
                     if self.plugin.debug2:
-                        self.plugin.logger.debug(f"Artwork unchanged skipping")
-        except:
+                        self.plugin.logger.debug("Artwork unchanged, skipping update.")
+        except Exception:
             if self.plugin.debug2:
                 self.plugin.logger.exception("async artwork save exception", exc_info=True)
             else:
@@ -1006,24 +1045,35 @@ class Plugin(indigo.PluginBase):
 
     def copy_default_image_to_pictures(self):
         """
-        Copy the default plugin image to the user's 'Pictures'-like directory
-        (self.saveDirectory) only if it does not already exist.
+        Copy the default plugin images to the user's 'Pictures'-like directory
+        (self.saveDirectory) only if they do not already exist.
+
+        This includes:
+          - apple-tv-default-thumb.png
+          - apple-tv-default-thumb-playing.png
+          - apple-tv-default-thumb-paused.png
         """
         try:
-            # Path to the default image inside the plugin folder:
-            default_image_path = os.path.join(self.pluginPath, "images", "apple-tv-default-thumb.png")
-            # Desired path in your "Pictures"/Documents/Indigo-appleTV folder:
-            # (self.saveDirectory was set to something like "~/Documents/Indigo-appleTV/")
-            target_image_path = os.path.join(self.saveDirectory, "apple-tv-default-thumb.png")
+            # List of default image filenames to copy.
+            default_files = [
+                "apple-tv-default-thumb-nothing.png",
+                "apple-tv-default-thumb-playing.png",
+                "apple-tv-default-thumb-paused.png",
+            ]
+            for filename in default_files:
+                # Path to the default image inside the plugin folder.
+                default_image_path = os.path.join(self.pluginPath, "images", filename)
+                # Desired target path in the saveDirectory.
+                target_image_path = os.path.join(self.saveDirectory, filename)
 
-            # Only copy if the file doesn't already exist.
-            if not os.path.exists(target_image_path):
-                shutil.copy(default_image_path, target_image_path)
-                self.logger.debug(f"Default image copied to {target_image_path}")
-            else:
-                self.logger.debug(f"Default image already exists in {target_image_path}")
+                # Only copy if the file doesn't already exist.
+                if not os.path.exists(target_image_path):
+                    shutil.copy(default_image_path, target_image_path)
+                    self.logger.debug(f"Default image '{filename}' copied to {target_image_path}")
+                else:
+                    self.logger.debug(f"Default image '{filename}' already exists in {target_image_path}")
         except Exception:
-            self.logger.debug("Error copying default image to Pictures directory.", exc_info=True)
+            self.logger.debug("Error copying default images to Pictures directory.", exc_info=True)
 
     def closedPrefsConfigUi(self, valuesDict, userCancelled):
         self.debugLog(u"closedPrefsConfigUi() method called.")
