@@ -27,7 +27,7 @@ import ipaddress
 from queue import Queue
 from logging.handlers import TimedRotatingFileHandler
 import time as time
-from typing import Optional
+from typing import Optional, cast
 try:
     import requests
 except:
@@ -40,6 +40,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 ## test, base import
 ## redo imports after installation
+
+import SimpleCommands
 
 import pyatv
 import pyatv.const
@@ -54,6 +56,8 @@ from pyatv.const import (
     PairingRequirement
 )
 from pyatv.interface import DeviceListener, PowerListener, AudioListener, PushListener
+from pyatv.protocols.companion import CompanionAPI, MediaControlCommand, SystemStatus
+from pyatv.core.facade import FacadeRemoteControl, FacadeTouchGestures
 import pyatv.exceptions
 from pyatv.interface import retrieve_commands
 from pyatv.storage.file_storage import FileStorage
@@ -287,7 +291,18 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
             self.plugin.logger.debug(f"send atc.power turn off command")
             self.loop.create_task(self.atv.power.turn_off())
 
+    async def screensaver_active(self) -> bool:
+        """Check if screensaver is active."""
+        return await self._system_status() == SystemStatus.Screensaver
 
+    async def _system_status(self) -> SystemStatus:
+        try:
+            if self.atv and isinstance(self.atv.apps.main_instance.api, CompanionAPI):
+                system_status = await self.atv.apps.main_instance.api.fetch_attention_state()
+                return system_status
+        except Exception:  # pylint: disable=broad-exception-caught
+            self.plugin.logger.exception("System status error")
+        return SystemStatus.Unknown
 
     def powerstate_update( self, old_state, new_state  ):
         try:
@@ -702,6 +717,10 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                 self.plugin.logger.info("Current AppleTV appears to be not connected.  Aborting Command.")
                 return
 
+            status = await self._system_status()
+            self.plugin.logger.debug(f"{status=}")
+
+            simple_commands = SimpleCommands.enum_to_dict()
             ctrl = retrieve_commands(pyatv.interface.RemoteControl)
             metadata = retrieve_commands(pyatv.interface.Metadata)
             power = retrieve_commands(pyatv.interface.Power)
@@ -718,17 +737,77 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
            # cmd, cmd_args = cmd, self._parse_args(cmd, args)
 
             self.plugin.logger.debug(f"cmd and cmd_args extracted and Cmd {cmd} and cmd_args {cmd_args}")
+            #self.plugin.logger.debug(f"{ctrl=}\n{metadata=}\nm{power=}\n{playing=}\n{stream=}\n{device_info=}\n{user_accounts=}")
             # if cmd in device:
             #     return await _exec_command(
             #         DeviceCommands(atv, loop, args), cmd, False, *cmd_args
             #     )
             # NB: Needs to be above RemoteControl for now as volume_up/down exists in both
             # but implementations in Audio shall be called
+            if cmd in simple_commands:
+                self.plugin.logger.debug(f"Simple Command Found {cmd=}")
+                match cmd:
+                    case 'SWIPE_LEFT':
+                        cmd_args = [1000, 500, 50, 500, 200]
+                        self.plugin.logger.debug(f"Case {cmd} Called with {cmd_args}")
+                        return await self._exec_command(self.atv.touch, "swipe", True,*cmd_args)
+
+                    case 'SWIPE_RIGHT':
+                        cmd_args = [50, 500, 1000, 500, 200]
+                        self.plugin.logger.debug(f"Case {cmd} Called with {cmd_args}")
+                        return await self._exec_command(self.atv.touch, "swipe", True, *cmd_args)
+
+                    case 'SWIPE_UP':
+                        cmd_args = [500, 1000, 500, 50, 200]
+                        self.plugin.logger.debug(f"Case {cmd} Called with {cmd_args}")
+                        return await self._exec_command(self.atv.touch, "swipe", True,*cmd_args)
+
+                    case 'SWIPE_DOWN':
+                        cmd_args = [500, 50, 500, 1000, 200]
+                        self.plugin.logger.debug(f"Case {cmd} Called with {cmd_args}")
+                        return await self._exec_command(self.atv.touch, "swipe", True, *cmd_args)
+
+                    case 'SCREENSAVER':
+                        self.plugin.logger.debug(f"Case {cmd} Called with {cmd_args}")
+                        return await self.screensaver()
+
+                    case "SKIP_BACKWARD":
+                        self.plugin.logger.debug(f"Case {cmd} Called with {cmd_args}")
+                        return await self.atv.remote_control.skip_backward()
+
+                    case "SKIP_FORWARD":
+                        self.plugin.logger.debug(f"Case {cmd} Called with {cmd_args}")
+                        return await self.atv.remote_control.skip_forward()
+
+                    case "APP_SWITCHER":
+                        self.plugin.logger.debug(f"Case {cmd} Called with {cmd_args}")
+                        return await self.atv.remote_control.home(InputAction.DoubleTap)
+
+                    case "TOP_MENU":
+                        self.plugin.logger.debug(f"Case {cmd} Called with {cmd_args}")
+                        return await self.atv.remote_control.menu(InputAction.Hold)
+
+                    case "CHANNEL_UP":
+                        return await self.atv.remote_control.channel_up()
+
+                    case "CHANNEL_DOWN":
+                        return await self.atv.remote_control.channel_down()
+
+                return
+
             if cmd in audio:
                 return await self._exec_command(self.atv.audio, cmd, True, *cmd_args)
 
             if cmd in ctrl:
-                return await self._exec_command(self.atv.remote_control, cmd, True, *cmd_args)
+                if await self.screensaver_active():
+                    self.plugin.logger.debug(f"Screen Saver is Running.  Turning off.  Cmd received {cmd}")
+                    await self._exec_command(self.atv.remote_control, "menu", print_result=False )
+
+                if cmd =="screensaver":
+                    return await self.screensaver()
+                else:
+                    await asyncio.sleep(0.5)
+                    return await self._exec_command(self.atv.remote_control, cmd, True, *cmd_args)
 
             if cmd in metadata:
                 return await self._exec_command(self.atv.metadata, cmd, True, *cmd_args)
@@ -762,6 +841,17 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
             return 1
         except:
             self.plugin.logger.exception("Caught Exception:")
+
+
+
+    async def screensaver(self) :
+        """Start screensaver."""
+        try:
+            await self.atv.remote_control.screensaver()
+        except pyatv.exceptions.ProtocolError:
+            # workaround: command succeeds and screensaver is started, but always returns
+            # ProtocolError: Command _hidC failed
+            pass
 
     async def _exec_command(self, obj, command, print_result, *args):
         try:
@@ -1654,6 +1744,8 @@ class Plugin(indigo.PluginBase):
             useraccount_list = {}
             touch_list = {}
 
+            simple_commands = {}
+
             self.logger.debug(f"commandListGenerator called {values_dict}")
             if "appleTV" in values_dict:
                 try:
@@ -1667,6 +1759,13 @@ class Plugin(indigo.PluginBase):
                             except:
                                 self.logger.exception("cmd_list exception")
                                 pass
+
+                            try:
+                                simple_list = SimpleCommands.enum_to_dict()
+                            except:
+                                self.logger.exception("Simple Commands exception")
+                                pass
+
                             try:
                                 pwr_list = retrieve_commands(pyatv.interface.Power)
                             except:
@@ -1719,6 +1818,11 @@ class Plugin(indigo.PluginBase):
                             for key,value in cmd_list.items():
                                 if not "DEPRECATED" in value:
                                     state_list.append((key,value))
+                            state_list.append((-1, "%%disabled:Simple Commands:%%"))
+                            for key, value in simple_list.items():
+                                if not "DEPRECATED" in value:
+                                    state_list.append((key, value))
+
                             state_list.append((-1, "%%disabled:Power Commands:%%"))
                             for key,value in pwr_list.items():
                                 if not "DEPRECATED" in value:
