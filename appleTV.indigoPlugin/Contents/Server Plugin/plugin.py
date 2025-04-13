@@ -71,6 +71,7 @@ import shutil
 
 from homekitlink_ffmpeg import get_ffmpeg_binary
 
+import datetime
 
 try:
     import pydevd_pycharm
@@ -295,13 +296,15 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         """Check if screensaver is active."""
         return await self._system_status() == SystemStatus.Screensaver
 
-    async def _system_status(self) -> SystemStatus:
+    async def _system_status(self):
         try:
             if self.atv and isinstance(self.atv.apps.main_instance.api, CompanionAPI):
                 system_status = await self.atv.apps.main_instance.api.fetch_attention_state()
                 return system_status
+            else:
+                return SystemStatus.Unknown
         except Exception:  # pylint: disable=broad-exception-caught
-            self.plugin.logger.exception("System status error")
+            self.plugin.logger.debug("System status error.  Likely Not Supported. ")
         return SystemStatus.Unknown
 
     def powerstate_update( self, old_state, new_state  ):
@@ -328,6 +331,9 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                     {'key': 'currentlyPlaying_SeriesName', 'value': f""},
                     {'key': 'currentlyPlaying_SeasonNumber', 'value': f""},
                     {'key': 'currentlyPlaying_EpisodeNumber', 'value': f""},
+                    {'key': 'currentlyPlaying_finishTime', 'value': f""},
+                    {'key': 'currentlyPlaying_remainingTime', 'value': f""},
+                    {'key': 'currentlyPlaying_percentComplete', 'value': f""},
                     {'key': 'currentlyPlaying_ArtworkID', 'value': f""},
                     {'key': 'currentlyPlaying_TotalTime', 'value': f""},
                     {'key': 'currentlyPlaying_PlayState', 'value': f""}
@@ -657,6 +663,10 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                 else:
                     if self.plugin.debug2:
                         self.plugin.logger.debug("Artwork unchanged, skipping update.")
+
+        except pyatv.exceptions.NotSupportedError:
+            self.plugin.logger.info(f"Artwork is not supported for this device.")
+            return
         except Exception:
             if self.plugin.debug2:
                 self.plugin.logger.exception("async artwork save exception", exc_info=True)
@@ -2092,6 +2102,24 @@ class Plugin(indigo.PluginBase):
         return
 
 
+    def seconds_to_time_remaining(self, seconds: int) -> str:
+        """
+        Convert seconds to a time remaining string.
+
+        If the duration is less than one hour, only the minutes are shown.
+        Otherwise, both hours and minutes are displayed.
+
+        Args:
+            seconds (int): The total number of seconds.
+
+        Returns:
+            str: A string formatted as "X hr Y min" if hours > 0, otherwise "Y min".
+        """
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        return f"{hours} hr {minutes} min" if hours > 0 else f"{minutes} min"
+
+
     async def process_playstatus(self, playstatus,  atv, time_start,deviceid, isAppleTV):
         try:
             #self.logger.debug(f"Process PlayStatus Called {playstatus}, {atv}, {atv.metadata} {time_start} and IndigoDeviceID {deviceid} ")
@@ -2119,15 +2147,24 @@ class Plugin(indigo.PluginBase):
             if atv is None:
                 playingState = "Off"
 
-            currently_playing_identifier = f"{getattr(playstatus, 'content_identifier', 'Not available')}"
-            series_name = f"{getattr(self, 'series_name', 'Not available')}"
-            season_number = f"{getattr(self, 'season_number', 'Not available')}"
-            episode_number = f"{getattr(self, 'episode_number', 'Not available')}"
+            currently_playing_identifier = f"{getattr(playstatus, 'content_identifier', '')}"
+            series_name = f"{getattr(self, 'series_name', '')}"
+            season_number = f"{getattr(self, 'season_number', '')}"
+            episode_number = f"{getattr(self, 'episode_number', '')}"
             try:
                 artworkID = atv.metadata.artwork_id
             except Exception as e:
                 self.logger.debug(f"Unable to retrieve artwork id: {e}")
                 artworkID = None
+
+            title = ""
+            if playstatus.title is not None:
+                # filter out non-printable characters, for example all emojis
+                # workaround for Plex DVR
+                if playstatus.title.startswith("(null):"):
+                    title = playstatus.title.removeprefix("(null):").strip()
+                else:
+                    title = f"{playstatus.title}"
 
             if playstatus.device_state != None:
                 state = playstatus.device_state
@@ -2142,27 +2179,67 @@ class Plugin(indigo.PluginBase):
                 elif state ==pyatv.const.DeviceState.Stopped:
                     playingState = "Stopped"
 
-            stateList = [
-                {'key': 'currentlyPlaying_AppId', 'value': f"{atv_appId}"},
-                {'key': 'currentlyPlaying_App', 'value': f"{atv_app}"},
-                {'key': 'currentlyPlaying_Artist', 'value': str(playstatus.artist)},
-                {'key': 'currentlyPlaying_Album', 'value': str(playstatus.album)},
-                {'key': 'currentlyPlaying_DeviceState', 'value': f"{playstatus.device_state}"},
-                {'key': 'currentlyPlaying_Genre', 'value': f"{playstatus.genre}"},
-                {'key': 'currentlyPlaying_MediaType', 'value': f"{playstatus.media_type}"},
-                {'key': 'currentlyPlaying_Position', 'value': f"{playstatus.position}"},
-                {'key': 'currentlyPlaying_Repeat', 'value': f"{playstatus.repeat}"},
-                {'key': 'currentlyPlaying_Shuffle', 'value': f"{playstatus.shuffle}"},
-                {'key': 'currentlyPlaying_Title', 'value': f"{playstatus.title}"},
-                {'key': 'currentlyPlaying_Identifier', 'value': f"{currently_playing_identifier}"},
-                {'key': 'currentlyPlaying_SeriesName', 'value': f"{series_name}"},
-                {'key': 'currentlyPlaying_SeasonNumber', 'value': f"{season_number}"},
-                {'key': 'currentlyPlaying_EpisodeNumber', 'value': f"{episode_number}"},
-                {'key': 'currentlyPlaying_ArtworkID', 'value': f"{artworkID}"},
-                {'key': 'currentlyPlaying_TotalTime', 'value': f"{playstatus.total_time}"},
-                {'key': 'currentlyPlaying_PlayState', 'value': f"{playingState}"}
+            total_time_str = f"{playstatus.total_time}"
+            current_position_str = f"{playstatus.position}"
+            # Retrieve and convert the device state values to integers
+            # If the state strings are empty, default to 0, otherwise convert to int
+            try:
+                total_time = int(total_time_str) if total_time_str.strip() != "" else 0
+            except ValueError:
+                total_time = 0
 
+            try:
+                current_position = int(current_position_str) if current_position_str.strip() != "" else 0
+            except ValueError:
+                current_position = 0
+
+            # Calculate the remaining seconds
+            remaining_seconds = total_time - current_position
+            # Get the finish time by adding the remaining seconds to the current time
+            finish_time = datetime.datetime.now() + datetime.timedelta(seconds=remaining_seconds)
+            # Format the finish time in 12-hour clock format "HH:MM"
+            if remaining_seconds == 0:
+                finish_time_str = ""
+                remainingTime = ""
+            else:
+                finish_time_str = finish_time.strftime("%I:%M %p").lstrip("0")
+                remainingTime = self.seconds_to_time_remaining(remaining_seconds)
+
+            try:
+                percentComplete = f"{float(current_position) / float(total_time):.1%}"
+            except:
+                percentComplete = ""
+
+            # Define a helper that returns an empty string if the value is None.
+            safe_str = lambda x: "" if x is None else x
+
+            # Define a helper that returns an empty string if the value is None.
+            safe_str = lambda x: "" if x is None else x
+
+            stateList = [
+                {'key': 'currentlyPlaying_AppId', 'value': f"{safe_str(atv_appId)}"},
+                {'key': 'currentlyPlaying_App', 'value': f"{safe_str(atv_app)}"},
+                {'key': 'currentlyPlaying_Artist', 'value': f"{safe_str(playstatus.artist)}"},
+                {'key': 'currentlyPlaying_Album', 'value': f"{safe_str(playstatus.album)}"},
+                {'key': 'currentlyPlaying_DeviceState', 'value': f"{safe_str(playstatus.device_state)}"},
+                {'key': 'currentlyPlaying_Genre', 'value': f"{safe_str(playstatus.genre)}"},
+                {'key': 'currentlyPlaying_MediaType', 'value': f"{safe_str(playstatus.media_type)}"},
+                {'key': 'currentlyPlaying_Position', 'value': f"{safe_str(playstatus.position)}"},
+                {'key': 'currentlyPlaying_Repeat', 'value': f"{safe_str(playstatus.repeat)}"},
+                {'key': 'currentlyPlaying_Shuffle', 'value': f"{safe_str(playstatus.shuffle)}"},
+                {'key': 'currentlyPlaying_Title', 'value': f"{safe_str(title)}"},
+                {'key': 'currentlyPlaying_Identifier', 'value': f"{safe_str(currently_playing_identifier)}"},
+                {'key': 'currentlyPlaying_SeriesName', 'value': f"{safe_str(series_name)}"},
+                {'key': 'currentlyPlaying_finishTime', 'value': f"{safe_str(finish_time_str)}"},
+                {'key': 'currentlyPlaying_remainingTime', 'value': f"{safe_str(remainingTime)}"},
+                {'key': 'currentlyPlaying_percentComplete', 'value': f"{safe_str(percentComplete)}"},
+                {'key': 'currentlyPlaying_SeasonNumber', 'value': f"{safe_str(season_number)}"},
+                {'key': 'currentlyPlaying_EpisodeNumber', 'value': f"{safe_str(episode_number)}"},
+                {'key': 'currentlyPlaying_ArtworkID', 'value': f"{safe_str(artworkID)}"},
+                {'key': 'currentlyPlaying_TotalTime', 'value': f"{safe_str(playstatus.total_time)}"},
+                {'key': 'currentlyPlaying_PlayState', 'value': f"{safe_str(playingState)}"}
             ]
+
             device.updateStatesOnServer(stateList)
 
         except:
