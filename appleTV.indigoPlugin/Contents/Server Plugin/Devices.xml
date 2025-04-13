@@ -72,6 +72,18 @@
 				   defaultValue="512"   >
 				<Label>Default Width for Artwork:</Label>
 			</Field>
+						<Field id="artwork_modify"
+				   type="checkbox"
+				   tooltip="Automatically Modify artwork pending PlayStatus"
+				   defaultValue="false"   >
+				<Label>Modify Artwork:</Label>
+			</Field>
+			    <Field id="infoLabel24" type="label" fontSize='large' fontColor="blue">
+        <Label>Auto Save Artwork:  Automatically save artwork to /Pictures/Indigo-appleTV when any changes detected
+Default Width:   Width for Artwork
+Modify Artwork:  Modify given Artwork depending on playstatus.   Fit given artwork into square box Width wide/high maintaining aspect ratio
+		</Label>
+				</Field>
 			        <Field id="sep7e" type="separator"/>
 
 

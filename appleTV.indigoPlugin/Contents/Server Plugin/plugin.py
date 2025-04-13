@@ -35,6 +35,9 @@ except:
 import time as t
 import binascii
 
+from io import BytesIO
+from PIL import Image, ImageDraw, ImageFont
+
 ## test, base import
 ## redo imports after installation
 
@@ -171,6 +174,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         self.loop = loop
         self.atv_config = atv_config
         self.current_artworkid = ""
+        self.last_artwork_mode = ""
         self.last_artworkid = ""
         self.devicename = devicename
         self._app_list = None
@@ -348,6 +352,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                 self.plugin.logger.debug(f"Artwork Update Forced {artwork_update}")
 
             artwork_width = device.pluginProps.get("artwork_width", 512)
+            artwork_modify = device.pluginProps.get("artwork_modify", False)
             try:
                 width_int = int(artwork_width)
             except (ValueError, TypeError):
@@ -360,9 +365,9 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
 
             if artwork_update:
                 if self.plugin.debug2:
-                    self.plugin.logger.debug("Updating Artwork as playstate changed and forced update selected.")
+                    self.plugin.logger.debug("Updating Artwork as playstate changed and Autosave Artwork selected.")
                 # Schedule the asynchronous artwork save task without blocking.
-                self.loop.create_task(self.async_artwork_save(filename, width_int, None, playstatus=playstatus))
+                self.loop.create_task(self.async_artwork_save(filename, width_int, None, playstatus=playstatus, artwork_modify=artwork_modify))
 
         except Exception:
             if self.plugin.debug2:
@@ -521,7 +526,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         args = cmd[equal_sign + 1:].split(",")
         return command, _parse_args(command, args)
 
-    async def async_artwork_save(self, filename, width, height=None, playstatus=None):
+    async def async_artwork_save(self, filename, width, height=None, playstatus=None, artwork_modify=None):
         """
         Download artwork and save it to filename.
 
@@ -554,20 +559,59 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
             self.current_artworkid = artworkID
 
             if self.plugin.debug2:
-                self.plugin.logger.debug(
-                    f"artworkID={artworkID}, current_artworkid={self.current_artworkid}, last_artworkid={self.last_artworkid}")
+                self.plugin.logger.debug(f"artworkID={artworkID}, current_artworkid={self.current_artworkid}, last_artworkid={self.last_artworkid}")
+
+            # Determine the desired mode based on playstatus.
+            desired_mode = "normal"  # default mode is color
+            if playstatus is not None and getattr(playstatus, "device_state", None) is not None:
+                state = playstatus.device_state
+                self.plugin.logger.debug(f"playstatus.device_state={state}")
+                if state == pyatv.const.DeviceState.Paused:
+                    desired_mode = "grayscale"
 
             # If artwork is available, write it if it has changed.
             if artwork is not None and artworkID is not None:
-                if self.last_artworkid != self.current_artworkid:
-                    with open(filename, "wb") as file:
-                        file.write(artwork.bytes)
-                    if self.plugin.debug2:
-                        self.plugin.logger.debug(f"Artwork Downloaded, mimetype {artwork.mimetype}")
-                    self.last_artworkid = artworkID
+                if artwork_modify:
+                    # Determine the desired mode based on playstatus.
+                    desired_mode = "normal"
+                    if playstatus is not None and getattr(playstatus, "device_state", None) is not None:
+                        state = playstatus.device_state
+                        if state == pyatv.const.DeviceState.Paused:
+                            desired_mode = "grayscale"
+
+                    # Process if artworkID has changed or mode is different.
+                    if (self.last_artworkid != artworkID) or (getattr(self, "last_artwork_mode", None) != desired_mode):
+                        # Open the artwork from the bytes.
+                        image_buffer = BytesIO(artwork.bytes)
+                        img = Image.open(image_buffer)
+
+                        final_img = self.process_to_square(img, box_size=width, to_grayscale=(desired_mode == "grayscale"))
+
+                        final_img.save(filename)
+
+                        if self.plugin.debug2:
+                            self.plugin.logger.debug(
+                                f"Processed artwork saved to {filename} using mode: {desired_mode}")
+
+                        self.last_artworkid = artworkID
+                        self.last_artwork_mode = desired_mode
+                    else:
+                        if self.plugin.debug2:
+                            self.plugin.logger.debug("Artwork and mode unchanged, skipping update.")
                 else:
-                    if self.plugin.debug2:
-                        self.plugin.logger.debug("Artwork unchanged, skipping update.")
+                    # If not modifying the artwork, simply save the bytes if artworkID is new.
+                    if self.last_artworkid != artworkID:
+                        with open(filename, "wb") as file:
+                            file.write(artwork.bytes)
+                        if self.plugin.debug2:
+                            self.plugin.logger.debug(f"Artwork saved to {filename} without modifications.")
+                        self.last_artworkid = artworkID
+                        # Clear last_artwork_mode since no processing was done.
+                        self.last_artwork_mode = None
+                    else:
+                        if self.plugin.debug2:
+                            self.plugin.logger.debug("Artwork unchanged, skipping update.")
+
             else:
                 # No valid artwork; use a fallback default image.
                 # Determine the fallback image and its ID based on playstatus.
@@ -603,6 +647,49 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                 self.plugin.logger.exception("async artwork save exception", exc_info=True)
             else:
                 self.plugin.logger.debug("async artwork save exception", exc_info=True)
+
+    def process_to_square(self, img, box_size, to_grayscale=False):
+        """
+        Resize the given image so that it fits inside a square of size (box_size x box_size)
+        while preserving its aspect ratio, then center it on a transparent canvas.
+
+        The output image is always in RGBA mode (so that the background is transparent).
+
+        Parameters:
+            img (PIL.Image): The input image.
+            box_size (int): The dimension of the output square.
+            to_grayscale (bool): If True, the image is converted to grayscale before processing.
+
+        Returns:
+            PIL.Image: The processed square image with a transparent background.
+        """
+        # Convert the input image to RGBA.
+        # If converting to grayscale, convert to "L" then back to "RGBA" so that the image appears grayscale.
+        if to_grayscale:
+            img = img.convert("L").convert("RGBA")
+        else:
+            img = img.convert("RGBA")
+
+        # Get original dimensions.
+        orig_w, orig_h = img.size
+        scale = min(box_size / orig_w, box_size / orig_h)
+        new_size = (int(orig_w * scale), int(orig_h * scale))
+
+        # Resize the image using high-quality downsampling.
+        resized = img.resize(new_size, resample=Image.LANCZOS)
+
+        # Create a new square canvas with a transparent background.
+        square_img = Image.new("RGBA", (box_size, box_size), (0, 0, 0, 0))
+
+        # Calculate position to center the resized image.
+        left = (box_size - new_size[0]) // 2
+        top = (box_size - new_size[1]) // 2
+
+        # Paste the resized image into the square canvas.
+        # If the image is in RGBA mode, use its alpha channel as a mask.
+        square_img.paste(resized, (left, top), mask=resized)
+
+        return square_img
 
     async def _handle_device_command(self, args, cmd ):
         try:
