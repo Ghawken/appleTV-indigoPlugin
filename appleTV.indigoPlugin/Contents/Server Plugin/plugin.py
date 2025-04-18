@@ -72,6 +72,7 @@ import shutil
 from homekitlink_ffmpeg import get_ffmpeg_binary
 
 import datetime
+import time
 
 try:
     import pydevd_pycharm
@@ -193,6 +194,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         self.manufacturer = "Apple"
         self.model = "Unknown"
         self.storage = None
+        self.playstatus_time = time.time()
         self._task = self.loop.create_task( self.loop_atv(self.loop, atv_config=self.atv_config, deviceid=self.deviceid) )
 
 
@@ -423,7 +425,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                 self._task.cancel()
                 self._task = None
         except Exception:  # pylint: disable=broad-except
-            self.plugin.logger.debug("An error occurred while disconnecting", exc_info=True)
+            self.plugin.logger.debug("An error occurred while disconnecting", exc_info=False)
         self.plugin.logger.debug(f"End of Disconnect.  Completed.")
 
     def connection_lost(self, exception: Exception) -> None:
@@ -444,7 +446,8 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         try:
             self.plugin.logger.debug(f"Playstatus Update Called for {self.devicename}")
             self.plugin.logger.debug(f"& PlayStatus\n {playstatus}")
-
+            self.playstatus_time = time.time()
+            self.plugin.logger.debug(f"PlayStatus Time updated: {time.time()-self.playstatus_time}")
             try:
                 self.task.cancel()
             except:
@@ -1037,13 +1040,13 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                 if self.atv:
                     self.atv.listener = self
                     self.atv.push_updater.listener = self
-
                     self.atv.power.listener = self
                     self.atv.audio.listener = self
                     self.plugin.logger.debug("Push updater started")
                     self.atv.push_updater.start()
                     device = indigo.devices[deviceid]
                     device.updateStateOnServer(key="status", value="Paired. Push Updating.")
+                    device.setErrorStateOnServer(None)
                     self.plugin.logger.debug(f"New IP ADDRESS: {newipaddress}")
                     if str(ipaddress) != str(newipaddress):
                         if self.validate_ip_address(newipaddress):
@@ -1092,6 +1095,8 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                         #self.plugin.logger.debug(f"Within main sleep 20 second loop killconnection {self._killConnection}")
                         if self._killConnection:
                             self.plugin.logger.debug("Breaking loop atv while True and retrying for connection")
+                            device.updateStateOnServer(key="status", value="Connection Failed.  Retrying...")
+                            device.setErrorStateOnServer("Connection Failed.")
                             if self.atv:
                                 self.atv.close()
                                 self.atv = None
@@ -1105,6 +1110,8 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
 
                 await asyncio.sleep(timeretry)
                 self.plugin.logger.debug(f"Attempting to Connect again...and self._killconnection {self._killConnection}")
+                device.updateStateOnServer(key="status", value="Connection Failed.  Retrying...")
+                device.setErrorStateOnServer("Connection Failed.")
                 timeretry = timeretry + 10
                 retries = retries + 1
                 if retries>=3:
