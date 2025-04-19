@@ -440,7 +440,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
     def connection_closed(self) -> None:
         """Call when connection was closed."""
         self.plugin.logger.info(f"Connection to appleTV - {self.devicename} closed.")
-        #self._killConnection = True
+        self._killConnection = True
 
     def playstatus_update(self, updater, playstatus: pyatv.interface.Playing) -> None:
         """Call when play status was updated."""
@@ -912,7 +912,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                 self.plugin.logger.info(f"Scanning for device using Multicast.")
                 atvs = await pyatv.scan(loop, identifier=identifier, storage=self.storage, timeout=20)
             if not atvs:
-                self.plugin.logger.info(f"Failed connection as this specific {self.devicename} cannot be found.  Please check its network connection.")
+                self.plugin.logger.info(f"Failed connection as this specific {self.devicename} cannot be found on the network.  Please check its network connection.")
                 return (False,"")
 
             config = atvs[0]
@@ -1052,12 +1052,12 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                         #self.plugin.logger.debug(f"Within main sleep 20 second loop killconnection {self._killConnection}")
                         if self._killConnection:
                             self.plugin.logger.debug("Breaking loop atv while True and retrying for connection")
-                            device.updateStateOnServer(key="status", value="Connection Failed.  Retrying...")
-                            device.setErrorStateOnServer("Connection Failed.")
                             if self.atv:
                                 self.atv.close()
                                 self.atv = None
                             self._killConnection = False
+                            device.updateStateOnServer(key="status", value="Connection Failed.  Retrying...")
+                            device.setErrorStateOnServer("Connection Failed.")
                             break  ## break while True and restart connection
                             #raise ConnectionResetError("Connection lost.  Raising Exception to restart loop manually.")
 
@@ -1072,7 +1072,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                 timeretry = timeretry + 10
                 retries = retries + 1
                 if retries>=3:
-                    self.plugin.logger.debug("Changing to Multicast Discovery as unicast IP based has failed.")
+                    self.plugin.logger.debug("Changing to Multicast Discovery as unicast IP has failed repeatedly.")
                     if self.cast == "unicast":
                         self.cast="multicast"
                     else:
