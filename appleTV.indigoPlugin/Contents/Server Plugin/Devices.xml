@@ -81,7 +81,9 @@
             		<Option value="overlay">On Pause Overlay Paused Image</Option>
 				</List>
 			</Field>
-
+			<Field id="artwork_overlay_info" type="checkbox" tooltip="Write information into File" defaultValue="False"   >
+				<Label>Overlay File Information on Artwork:</Label>
+			</Field>
 
 			    <Field id="infoLabel24" type="label" fontSize='large' fontColor="blue">
         <Label>Auto Save Artwork:  Automatically save artwork to /Pictures/Indigo-appleTV when any changes detected

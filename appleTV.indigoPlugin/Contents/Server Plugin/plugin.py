@@ -377,6 +377,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
 
             artwork_width = device.pluginProps.get("artwork_width", 512)
             artwork_modify = device.pluginProps.get("artwork_modify_menu", "None")
+            artwork_overlay_info = device.pluginProps.get("artwork_overlay_info", False)
             try:
                 width_int = int(artwork_width)
             except (ValueError, TypeError):
@@ -391,7 +392,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                 if self.plugin.debug2:
                     self.plugin.logger.debug("Updating Artwork as playstate changed and Autosave Artwork selected.")
                 # Schedule the asynchronous artwork save task without blocking.
-                self.loop.create_task(self.async_artwork_save(filename, width_int, None, playstatus=playstatus, artwork_modify=artwork_modify))
+                self.loop.create_task(self.async_artwork_save(filename, width_int, None, playstatus=playstatus, artwork_modify=artwork_modify, artwork_overlay_info=artwork_overlay_info))
 
         except Exception:
             if self.plugin.debug2:
@@ -414,20 +415,41 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         except:
             self.plugin.logger.debugf("_handle disconnect and restart", exc_info=True)
 
+
+
     def disconnect(self):
-        """Disconnect from device."""
-        self.plugin.logger.debug(f"Disconnecting from device {self.devicename}")
-        self.is_on = False
+        """Schedule async cleanup in the loop thread and wait for it."""
+        self.plugin.logger.debug("Disconnecting from device")
+
+       # run the coroutine safely in the event‑loop thread
+        fut = asyncio.run_coroutine_threadsafe(self._async_cleanup(), self.loop)
+        # Optional: block until cleanup finished (or add timeout)
         try:
-            if self.atv:
-                self.atv.close()
-                self.atv = None
-            if self._task:
-                self._task.cancel()
-                self._task = None
-        except Exception:  # pylint: disable=broad-except
-            self.plugin.logger.debug("An error occurred while disconnecting", exc_info=False)
-        self.plugin.logger.debug(f"End of Disconnect.  Completed.")
+            fut.result(timeout=5)
+        except Exception:
+            self.plugin.logger.exception("Async cleanup failed")
+
+    async def _async_cleanup(self):
+        self.is_on = False
+        self._killConnection = True
+
+        if self.atv:
+            pending = self.atv.close()  # plain call, no await
+            # Newer pyatv returns a set[Task]; older versions return None
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+            self.atv = None
+
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+
+        self.plugin.logger.debug("End of Disconnect – completed.")
+
 
     def connection_lost(self, exception: Exception) -> None:
         """Call when connection was lost."""
@@ -551,7 +573,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         args = cmd[equal_sign + 1:].split(",")
         return command, _parse_args(command, args)
 
-    async def async_artwork_save(self, filename, width, height=None, playstatus=None, artwork_modify=None):
+    async def async_artwork_save(self, filename, width, height=None, playstatus=None, artwork_modify=None, artwork_overlay_info=None):
         """
         Download artwork and save it to filename.
 
@@ -577,8 +599,8 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
             paused = state == pyatv.const.DeviceState.Paused
 
             if self.plugin.debug2:
-                self.plugin.logger.debug(f"artworkID={artworkID}, last_id={self.last_artworkid}, "
-                                         f"modify={artwork_modify}, state={state}")
+                self.plugin.logger.debug(f"artworkID={artworkID!r}, state={state}, modify={artwork_modify}, "
+                                         f"overlay_info={artwork_overlay_info}")
 
             # Immediate fallback if no valid ID or no artwork
             if artworkID is None or artworkID == '' or artwork is None:
@@ -607,7 +629,6 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
             # Process only on change
             if self.last_artworkid != artworkID or getattr(self, 'last_artwork_modify', None) != mode:
                 img = Image.open(BytesIO(artwork.bytes))
-
                 # Always square-resize first
                 final = self.process_to_square(img, box_size=width,
                                                to_grayscale=(mode == 'grayscale'))
@@ -626,6 +647,9 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                             self.plugin.logger.exception(f"Overlay failed at {overlay_path}")
                         else:
                             self.plugin.logger.debug(f"Overlay failed at {overlay_path}", exc_info=True)
+                # Info overlay applied after all processing
+                if artwork_overlay_info:
+                    final = self._draw_info_overlay(final)
 
                 final.save(filename)
                 self.plugin.logger.debug(f"Processed '{mode}' saved to {filename}")
@@ -654,11 +678,6 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
             self.last_artworkid = default_id
             self.last_artwork_modify = None
 
-    # Logging helper
-    async def _log(self, msg, filename):
-        if self.plugin.debug2:
-            self.plugin.logger.debug(f"{msg} -> {filename}")
-
     def process_to_square(self, img, box_size, to_grayscale=False):
         """
         Fit image inside box_size x box_size, preserving aspect, on transparent canvas.
@@ -675,6 +694,48 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         y = (box_size - new.height) // 2
         canvas.paste(new, (x, y), mask=new)
         return canvas
+
+    def _draw_info_overlay(self, img):
+        """
+        Overlay playback info (left-justified text and bottom bar) onto square RGBA image.
+        """
+        width, height = img.size
+        draw = ImageDraw.Draw(img)
+        device = indigo.devices[self.deviceid]
+        title = device.states.get("currentlyPlaying_Title", "")
+        finish = device.states.get("currentlyPlaying_finishTime", "")
+        percent = device.states.get("currentlyPlaying_percentComplete", "0")
+        self.plugin.logger.debug(f"{width=}\n{height=}\n{percent}")
+        # font size ~10% of width, min 24px
+        try:
+            size = max(10, int(width * 0.05))
+            font = ImageFont.truetype("Arial.ttf", size)
+        except:
+            font = ImageFont.load_default()
+            self.plugin.logger.debugg(f"Exception occured while drawing info overlay")
+        margin = max(10, int(width * 0.03))
+
+        # Title bottom-left
+        bbox_title = draw.textbbox((0, 0), title, font=font)
+        title_h = bbox_title[3] - bbox_title[1]
+        x_title = margin
+        y_title = height - margin - title_h
+        for dx, dy in [(-2, 0), (2, 0), (0, -2), (0, 2)]:
+            draw.text((x_title + dx, y_title + dy), title, font=font, fill="black")
+        draw.text((x_title, y_title), title, font=font, fill="white")
+
+        # Finish time bottom-right
+        info = f"Finishes: {finish}"
+        bbox_info = draw.textbbox((0, 0), info, font=font)
+        info_w = bbox_info[2] - bbox_info[0]
+        info_h = bbox_info[3] - bbox_info[1]
+        x_info = width - margin - info_w
+        y_info = height - margin - info_h
+        for dx, dy in [(-2, 0), (2, 0), (0, -2), (0, 2)]:
+            draw.text((x_info + dx, y_info + dy), info, font=font, fill="black")
+        draw.text((x_info, y_info), info, font=font, fill="white")
+
+        return img
 
     async def _handle_device_command(self, args, cmd ):
         try:
@@ -1051,11 +1112,12 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                         await asyncio.sleep(2)
                         #self.plugin.logger.debug(f"Within main sleep 20 second loop killconnection {self._killConnection}")
                         if self._killConnection:
+                            self._killConnection = False
                             self.plugin.logger.debug("Breaking loop atv while True and retrying for connection")
                             if self.atv:
                                 self.atv.close()
                                 self.atv = None
-                            self._killConnection = False
+
                             device.updateStateOnServer(key="status", value="Connection Failed.  Retrying...")
                             device.setErrorStateOnServer("Connection Failed.")
                             break  ## break while True and restart connection
@@ -1063,7 +1125,6 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
 
                     self.plugin.logger.debug("End of Loop, attempting reconnection...")
                     timeretry = 20
-
 
                 await asyncio.sleep(timeretry)
                 self.plugin.logger.debug(f"Attempting to Connect again...and self._killconnection {self._killConnection}")
@@ -1434,6 +1495,7 @@ class Plugin(indigo.PluginBase):
                     self.appleTVManagers[i].disconnect()
                     del self.appleTVManagers[i]
                     self.logger.info(f"Removed AppleTV Manager for device: {device.name}")
+                    self.sleep(3)
 
 
         except:
@@ -1572,7 +1634,7 @@ class Plugin(indigo.PluginBase):
     def validateDeviceConfigUi(self, values_dict, type_id, dev_id):
         try:
             self.logger.debug(f"ValidateDevice Config UI called {values_dict} and ID {dev_id}")
-            self.sleep(0.2)
+            self.sleep(2)
             if self._paired_credentials != None:
                 values_dict["credentials"]= str(self._paired_credentials)
                 values_dict["isPaired"] = True
