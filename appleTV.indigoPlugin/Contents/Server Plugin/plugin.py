@@ -708,43 +708,69 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
 
     def _draw_info_overlay(self, img):
         """
-        Overlay playback info (left-justified text and bottom bar) onto square RGBA image.
+        Overlay playback info on the bottom edge of a square RGBA image.
+
+        • Left  : track title (auto‑shrinks so it never collides with the right label)
+        • Right : "Finishes: <time>"
+        Both share the same baseline.
         """
+        from PIL import ImageDraw, ImageFont
+
         width, height = img.size
         draw = ImageDraw.Draw(img)
         device = indigo.devices[self.deviceid]
+
         title = device.states.get("currentlyPlaying_Title", "")
         finish = device.states.get("currentlyPlaying_finishTime", "")
-        percent = device.states.get("currentlyPlaying_percentComplete", "0")
-        self.plugin.logger.debug(f"{width=}\n{height=}\n{percent}")
-        # font size ~10% of width, min 24px
-        try:
-            size = max(10, int(width * 0.05))
-            font = ImageFont.truetype("Arial.ttf", size)
-        except:
-            font = ImageFont.load_default()
-            self.plugin.logger.debugg(f"Exception occured while drawing info overlay")
-        margin = max(10, int(width * 0.03))
 
-        # Title bottom-left
-        bbox_title = draw.textbbox((0, 0), title, font=font)
-        title_h = bbox_title[3] - bbox_title[1]
+        # ---------- constants ---------------------------------------------------
+        margin = max(10, int(width * 0.03))  # px
+        base_size = max(10, int(width * 0.05))  # starting font size
+
+        def _load_font(sz: int):
+            try:
+                return ImageFont.truetype("Arial.ttf", sz)
+            except Exception:
+                return ImageFont.load_default()
+
+        base_font = _load_font(base_size)
+
+        # ---------- right‑hand label ("Finishes: …") ----------------------------
+        info_txt = f"Finishes: {finish}"
+        info_bbox = draw.textbbox((0, 0), info_txt, font=base_font)
+        info_w = info_bbox[2] - info_bbox[0]
+        info_h = info_bbox[3] - info_bbox[1]
+
+        # ---------- shrink title until it fits without overlap ------------------
+        title_font = base_font
+        cur_size = base_size
+        max_title_w = width - (info_w + 3 * margin)  # leave safety gap
+
+        while cur_size > 12:
+            title_bbox = draw.textbbox((0, 0), title, font=title_font)
+            title_w = title_bbox[2] - title_bbox[0]
+            if title_w <= max_title_w:
+                break
+            cur_size = int(cur_size * 0.9)  # shrink 10 %
+            title_font = _load_font(cur_size)
+
+        title_h = draw.textbbox((0, 0), title, font=title_font)[3]
+
+        # ---------- shared baseline --------------------------------------------
+        baseline_y = height - margin - max(title_h, info_h)
+
         x_title = margin
-        y_title = height - margin - title_h
-        for dx, dy in [(-2, 0), (2, 0), (0, -2), (0, 2)]:
-            draw.text((x_title + dx, y_title + dy), title, font=font, fill="black")
-        draw.text((x_title, y_title), title, font=font, fill="white")
-
-        # Finish time bottom-right
-        info = f"Finishes: {finish}"
-        bbox_info = draw.textbbox((0, 0), info, font=font)
-        info_w = bbox_info[2] - bbox_info[0]
-        info_h = bbox_info[3] - bbox_info[1]
         x_info = width - margin - info_w
-        y_info = height - margin - info_h
-        for dx, dy in [(-2, 0), (2, 0), (0, -2), (0, 2)]:
-            draw.text((x_info + dx, y_info + dy), info, font=font, fill="black")
-        draw.text((x_info, y_info), info, font=font, fill="white")
+
+        # ---------- helper to draw white text with dark outline ----------------
+        def _outline_text(x, y, txt, fnt):
+            for dx, dy in [(-2, 0), (2, 0), (0, -2), (0, 2)]:
+                draw.text((x + dx, y + dy), txt, font=fnt, fill="black")
+            draw.text((x, y), txt, font=fnt, fill="white")
+
+        # ---------- render ------------------------------------------------------
+        _outline_text(x_title, baseline_y, title, title_font)
+        _outline_text(x_info, baseline_y, info_txt, base_font)
 
         return img
 
