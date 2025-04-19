@@ -182,6 +182,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         self.current_artworkid = ""
         self.last_artwork_mode = ""
         self.last_artworkid = ""
+        self.last_artwork_modify = ""
         self.devicename = devicename
         self._app_list = None
         self.all_features = None
@@ -375,7 +376,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                 self.plugin.logger.debug(f"Artwork Update Forced {artwork_update}")
 
             artwork_width = device.pluginProps.get("artwork_width", 512)
-            artwork_modify = device.pluginProps.get("artwork_modify", False)
+            artwork_modify = device.pluginProps.get("artwork_modify_menu", "None")
             try:
                 width_int = int(artwork_width)
             except (ValueError, TypeError):
@@ -439,7 +440,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
     def connection_closed(self) -> None:
         """Call when connection was closed."""
         self.plugin.logger.info(f"Connection to appleTV - {self.devicename} closed.")
-        self._killConnection = True
+        #self._killConnection = True
 
     def playstatus_update(self, updater, playstatus: pyatv.interface.Playing) -> None:
         """Call when play status was updated."""
@@ -554,170 +555,126 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         """
         Download artwork and save it to filename.
 
-        If artwork is available and its id differs from the last one saved, save the new artwork.
-        Otherwise, use a default image.
+        Modes via artwork_modify:
+          - None or "None": raw bytes save.
+          - "size": resize+square.
+          - "grayscale": square+grayscale (only when paused; otherwise size).
+          - "overlay": square+overlay (only when paused; otherwise size).
 
-        If 'playstatus' is provided and its device_state is set, then use a different default
-        image based on whether the device is Playing or Paused. Otherwise, fallback to the generic default.
-
-        Parameters:
-            filename (str): Target file path for saving the artwork.
-            width (int): Artwork width to request.
-            height (int, optional): Artwork height to request.
-            playstatus (optional): Object with a device_state attribute.
+        Overlay image is expected in self.plugin.saveDirectory named 'apple-tv-pause-overlay.png'.
         """
         try:
-            # Check if AppleTV object and metadata exist
-            if self.atv is None:
+            # Early exits
+            if self.atv is None or self.atv.metadata is None:
                 if self.plugin.debug2:
-                    self.plugin.logger.info("No AppleTV exists. ?Disconnected. Aborted Artwork save.")
-                return
-            if self.atv.metadata is None:
-                if self.plugin.debug2:
-                    self.plugin.logger.debug("No Metadata available. Aborted.")
+                    self.plugin.logger.debug("No AppleTV or metadata. Aborting artwork save.")
                 return
 
-            # Attempt to get the artwork from the device
+            # Fetch artwork
             artwork = await self.atv.metadata.artwork(width=width, height=height)
-            artworkID = self.atv.metadata.artwork_id
-            self.current_artworkid = artworkID
+            artworkID = self.atv.metadata.artwork_id or ''
+            state = getattr(playstatus, 'device_state', None) if playstatus else None
+            paused = state == pyatv.const.DeviceState.Paused
 
             if self.plugin.debug2:
-                self.plugin.logger.debug(f"artworkID={artworkID}, current_artworkid={self.current_artworkid}, last_artworkid={self.last_artworkid}")
+                self.plugin.logger.debug(f"artworkID={artworkID}, last_id={self.last_artworkid}, "
+                                         f"modify={artwork_modify}, state={state}")
 
-            # Determine the desired mode based on playstatus.
-            desired_mode = "normal"  # default mode is color
-            if playstatus is not None and getattr(playstatus, "device_state", None) is not None:
-                state = playstatus.device_state
-                self.plugin.logger.debug(f"playstatus.device_state={state}")
-                if state == pyatv.const.DeviceState.Paused:
-                    desired_mode = "grayscale"
+            # Immediate fallback if no valid ID or no artwork
+            if artworkID is None or artworkID == '' or artwork is None:
+                await self._save_default(filename, state)
+                return
 
-            # If artwork is available, write it if it has changed.
-            if artwork is not None and artworkID is not None:
-                if artwork_modify:
-                    # Determine the desired mode based on playstatus.
-                    desired_mode = "normal"
-                    if playstatus is not None and getattr(playstatus, "device_state", None) is not None:
-                        state = playstatus.device_state
-                        if state == pyatv.const.DeviceState.Paused:
-                            desired_mode = "grayscale"
+            # Raw mode
+            if artwork_modify in (None, "None"):
+                # If ID blank, use default instead of raw
+                if not artworkID:
+                    await self._save_default(filename, state)
+                    return
+                if self.last_artworkid != artworkID or self.last_artwork_modify is not None:
+                    with open(filename, 'wb') as f:
+                        f.write(artwork.bytes)
+                    self.plugin.logger.debug(f"Raw artwork saved {filename}")
+                    self.last_artworkid = artworkID
+                    self.last_artwork_modify = None
+                return
 
-                    # Process if artworkID has changed or mode is different.
-                    if (self.last_artworkid != artworkID) or (getattr(self, "last_artwork_mode", None) != desired_mode):
-                        # Open the artwork from the bytes.
-                        image_buffer = BytesIO(artwork.bytes)
-                        img = Image.open(image_buffer)
+            # Determine actual mode: size always, except apply grayscale/overlay only if paused
+            mode = artwork_modify
+            if artwork_modify in ('grayscale', 'overlay') and not paused:
+                mode = 'size'
 
-                        final_img = self.process_to_square(img, box_size=width, to_grayscale=(desired_mode == "grayscale"))
+            # Process only on change
+            if self.last_artworkid != artworkID or getattr(self, 'last_artwork_modify', None) != mode:
+                img = Image.open(BytesIO(artwork.bytes))
 
-                        final_img.save(filename)
+                # Always square-resize first
+                final = self.process_to_square(img, box_size=width,
+                                               to_grayscale=(mode == 'grayscale'))
 
+                # Overlay on paused
+                if mode == 'overlay' and paused:
+                    overlay_path = os.path.join(self.plugin.saveDirectory, 'apple-tv-default-thumb-overlay.png')
+                    try:
+                        overlay = Image.open(overlay_path).convert('RGBA')
+                        ol = int(width * 0.7)
+                        overlay = overlay.resize((ol, ol), Image.LANCZOS)
+                        x = (width - ol) // 2
+                        final.paste(overlay, (x, x), mask=overlay)
+                    except Exception:
                         if self.plugin.debug2:
-                            self.plugin.logger.debug(
-                                f"Processed artwork saved to {filename} using mode: {desired_mode}")
+                            self.plugin.logger.exception(f"Overlay failed at {overlay_path}")
+                        else:
+                            self.plugin.logger.debug(f"Overlay failed at {overlay_path}", exc_info=True)
 
-                        self.last_artworkid = artworkID
-                        self.last_artwork_mode = desired_mode
-                    else:
-                        if self.plugin.debug2:
-                            self.plugin.logger.debug("Artwork and mode unchanged, skipping update.")
-                else:
-                    # If not modifying the artwork, simply save the bytes if artworkID is new.
-                    if self.last_artworkid != artworkID:
-                        with open(filename, "wb") as file:
-                            file.write(artwork.bytes)
-                        if self.plugin.debug2:
-                            self.plugin.logger.debug(f"Artwork saved to {filename} without modifications.")
-                        self.last_artworkid = artworkID
-                        # Clear last_artwork_mode since no processing was done.
-                        self.last_artwork_mode = None
-                    else:
-                        if self.plugin.debug2:
-                            self.plugin.logger.debug("Artwork unchanged, skipping update.")
-
-            else:
-                # No valid artwork; use a fallback default image.
-                # Determine the fallback image and its ID based on playstatus.
-                fallback_default = "apple-tv-default-thumb-nothing.png"
-                default_artwork_id = "Default_Image"
-                if playstatus is not None and getattr(playstatus, "device_state", None) is not None:
-                    state = playstatus.device_state
-                    self.plugin.logger.debug(f"{playstatus.device_state=}, {state=}")
-                    # You may need to adjust these comparisons based on your pyatv API/constants.
-                    if state == pyatv.const.DeviceState.Playing:
-                        fallback_default = "apple-tv-default-thumb-playing.png"
-                        default_artwork_id = "Default_Image_Playing"
-                    elif state == pyatv.const.DeviceState.Paused:
-                        fallback_default = "apple-tv-default-thumb-paused.png"
-                        default_artwork_id = "Default_Image_Paused"
-                    else:
-                        fallback_default = "apple-tv-default-thumb-nothing.png"
-                        default_artwork_id = "Default_Image"
-
-                # Only copy if we haven't already used this default image for the current state.
-                if self.last_artworkid != default_artwork_id:
-                    copied_image_path = os.path.join(self.plugin.saveDirectory, fallback_default)
-                    shutil.copy(copied_image_path, filename)
-                    if self.plugin.debug2:
-                        self.plugin.logger.debug(f"{fallback_default} copied to {copied_image_path}")
-                        self.plugin.logger.debug("No artwork available. Default image used.")
-                    self.last_artworkid = default_artwork_id
-                else:
-                    if self.plugin.debug2:
-                        self.plugin.logger.debug("Artwork unchanged, skipping update.")
+                final.save(filename)
+                self.plugin.logger.debug(f"Processed '{mode}' saved to {filename}")
+                self.last_artworkid = artworkID
+                self.last_artwork_modify = mode
 
         except pyatv.exceptions.NotSupportedError:
-            self.plugin.logger.info(f"Artwork is not supported for this device.")
-            return
+            self.plugin.logger.info("Artwork not supported for this device.")
         except Exception:
-            if self.plugin.debug2:
-                self.plugin.logger.exception("async artwork save exception", exc_info=True)
-            else:
-                self.plugin.logger.debug("async artwork save exception", exc_info=True)
+            self.plugin.logger.exception("async artwork save exception")
+
+    # Helper to copy default
+    async def _save_default(self, filename, state):
+        fallback = 'apple-tv-default-thumb-nothing.png'
+        default_id = 'Default_Image'
+        if state == pyatv.const.DeviceState.Playing:
+            fallback = 'apple-tv-default-thumb-playing.png';
+            default_id = 'Default_Image_Playing'
+        elif state == pyatv.const.DeviceState.Paused:
+            fallback = 'apple-tv-default-thumb-paused.png';
+            default_id = 'Default_Image_Paused'
+        if self.last_artworkid != default_id:
+            src = os.path.join(self.plugin.saveDirectory, fallback)
+            shutil.copy(src, filename)
+            self.plugin.logger.debug(f"Default '{fallback}' used {filename}")
+            self.last_artworkid = default_id
+            self.last_artwork_modify = None
+
+    # Logging helper
+    async def _log(self, msg, filename):
+        if self.plugin.debug2:
+            self.plugin.logger.debug(f"{msg} -> {filename}")
 
     def process_to_square(self, img, box_size, to_grayscale=False):
         """
-        Resize the given image so that it fits inside a square of size (box_size x box_size)
-        while preserving its aspect ratio, then center it on a transparent canvas.
-
-        The output image is always in RGBA mode (so that the background is transparent).
-
-        Parameters:
-            img (PIL.Image): The input image.
-            box_size (int): The dimension of the output square.
-            to_grayscale (bool): If True, the image is converted to grayscale before processing.
-
-        Returns:
-            PIL.Image: The processed square image with a transparent background.
+        Fit image inside box_size x box_size, preserving aspect, on transparent canvas.
         """
-        # Convert the input image to RGBA.
-        # If converting to grayscale, convert to "L" then back to "RGBA" so that the image appears grayscale.
         if to_grayscale:
-            img = img.convert("L").convert("RGBA")
+            img = img.convert('L').convert('RGBA')
         else:
-            img = img.convert("RGBA")
-
-        # Get original dimensions.
-        orig_w, orig_h = img.size
-        scale = min(box_size / orig_w, box_size / orig_h)
-        new_size = (int(orig_w * scale), int(orig_h * scale))
-
-        # Resize the image using high-quality downsampling.
-        resized = img.resize(new_size, resample=Image.LANCZOS)
-
-        # Create a new square canvas with a transparent background.
-        square_img = Image.new("RGBA", (box_size, box_size), (0, 0, 0, 0))
-
-        # Calculate position to center the resized image.
-        left = (box_size - new_size[0]) // 2
-        top = (box_size - new_size[1]) // 2
-
-        # Paste the resized image into the square canvas.
-        # If the image is in RGBA mode, use its alpha channel as a mask.
-        square_img.paste(resized, (left, top), mask=resized)
-
-        return square_img
+            img = img.convert('RGBA')
+        w, h = img.size
+        scale = min(box_size / w, box_size / h)
+        new = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+        canvas = Image.new('RGBA', (box_size, box_size), (0, 0, 0, 0))
+        x = (box_size - new.width) // 2
+        y = (box_size - new.height) // 2
+        canvas.paste(new, (x, y), mask=new)
+        return canvas
 
     async def _handle_device_command(self, args, cmd ):
         try:
@@ -1253,6 +1210,7 @@ class Plugin(indigo.PluginBase):
                 "apple-tv-default-thumb-nothing.png",
                 "apple-tv-default-thumb-playing.png",
                 "apple-tv-default-thumb-paused.png",
+                "apple-tv-default-thumb-overlay.png"
             ]
             for filename in default_files:
                 # Path to the default image inside the plugin folder.

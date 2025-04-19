@@ -72,12 +72,17 @@
 				   defaultValue="512"   >
 				<Label>Default Width for Artwork:</Label>
 			</Field>
-						<Field id="artwork_modify"
-				   type="checkbox"
-				   tooltip="Automatically Modify artwork pending PlayStatus"
-				   defaultValue="false"   >
+			<Field id="artwork_modify_menu" type="menu" tooltip="Automatically Modify artwork pending PlayStatus" defaultValue="None"   >
 				<Label>Modify Artwork:</Label>
+				<List>
+            		<Option value="None">No Modification</Option>
+            		<Option value="size">Aspect Ratio Only</Option>
+            		<Option value="grayscale">On Pause Greyscale Artwork</Option>
+            		<Option value="overlay">On Pause Overlay Paused Image</Option>
+				</List>
 			</Field>
+
+
 			    <Field id="infoLabel24" type="label" fontSize='large' fontColor="blue">
         <Label>Auto Save Artwork:  Automatically save artwork to /Pictures/Indigo-appleTV when any changes detected
 Default Width:   Width for Artwork
