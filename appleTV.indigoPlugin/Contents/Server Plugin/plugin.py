@@ -378,6 +378,10 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
             artwork_width = device.pluginProps.get("artwork_width", 512)
             artwork_modify = device.pluginProps.get("artwork_modify_menu", "None")
             artwork_overlay_info = device.pluginProps.get("artwork_overlay_info", False)
+
+            artwork_progressBar = device.pluginProps.get("artwork_progressBar", False)
+            artwork_progressBar_colour = device.pluginProps.get("progressBar_fillColour", "white")
+
             try:
                 width_int = int(artwork_width)
             except (ValueError, TypeError):
@@ -387,12 +391,19 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
 
             # Build the filename for the artwork file.
             filename = f"{self.plugin.saveDirectory}/{self.devicename}_Artwork.png"
+            filename_progressBar = f"{self.plugin.saveDirectory}/{self.devicename}_ProgressBar.png"
 
             if artwork_update:
                 if self.plugin.debug2:
                     self.plugin.logger.debug("Updating Artwork as playstate changed and Autosave Artwork selected.")
                 # Schedule the asynchronous artwork save task without blocking.
                 self.loop.create_task(self.async_artwork_save(filename, width_int, None, playstatus=playstatus, artwork_modify=artwork_modify, artwork_overlay_info=artwork_overlay_info))
+
+            if artwork_progressBar:
+                if self.plugin.debug2:
+                    self.plugin.logger.debug(f"Updating ProgressBar as playstate changed and Autosave Artwork selected.")
+                self.plugin.save_progress_bar_for_device(device, bar_width=width_int, colour=artwork_progressBar_colour)
+
 
         except Exception:
             if self.plugin.debug2:
@@ -425,7 +436,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         fut = asyncio.run_coroutine_threadsafe(self._async_cleanup(), self.loop)
         # Optional: block until cleanup finished (or add timeout)
         try:
-            fut.result(timeout=5)
+            fut.result(timeout=10)
         except Exception:
             self.plugin.logger.exception("Async cleanup failed")
 
@@ -1495,8 +1506,6 @@ class Plugin(indigo.PluginBase):
                     self.appleTVManagers[i].disconnect()
                     del self.appleTVManagers[i]
                     self.logger.info(f"Removed AppleTV Manager for device: {device.name}")
-                    self.sleep(3)
-
 
         except:
             self.logger.debug("Exception in DeviceStopCom \n", exc_info=True)
@@ -2016,6 +2025,159 @@ class Plugin(indigo.PluginBase):
         self.sleep(1)
         indigo.device.enable(int(appleTVid), value=True)
 
+        # ---------------------------------------------------------------------
+        # ---------------------------------------------------------------------
+        # Action‑group handler: create progress bar PNG for selected Apple TV
+        # ---------------------------------------------------------------------
+    # ================================================
+    # New helper to create progress bar directly from a device (no valuesDict)
+    # ================================================
+    def save_progress_bar_for_device(self, device, bar_width: int = 800, colour="white"):
+        """Generate/overwrite <DeviceName>_progressBar.png for the given Indigo device."""
+        try:
+            # Extract playback states
+            try:
+                pos = int(device.states.get("currentlyPlaying_Position", 0))
+                total = int(device.states.get("currentlyPlaying_TotalTime", 0))
+            except Exception:
+                self.logger.debug("State conversion failed", exc_info=False)
+                pos, total = 0, 0
+
+            img = self._make_progress_bar_png(position=pos, total=total, width_px=bar_width, fill_colour=colour)
+            if img is None:
+                self.logger.debug("Progress bar not generated due to previous error")
+                return
+            file_path = f"{self.saveDirectory}/{device.name}_progressBar.png"
+            img.save(file_path)
+            self.logger.debug(f"Progress bar saved to {file_path}")
+        except Exception:
+            self.logger.exception("save_progress_bar_for_device failed")
+
+
+    def saveProgressBar(self, valuesDict, typeId):
+        """Generate <DeviceName>_progressBar.png reflecting current playback."""
+        try:
+            props = valuesDict.props
+            atv_id = props.get("appleTV", "")
+            if not atv_id:
+                self.logger.info("No AppleTV selected.")
+                return
+
+            try:
+                bar_width = int(props.get("width", "") or 800)
+            except ValueError:
+                self.logger.debug("Width conversion failed; defaulting to 800", exc_info=True)
+                bar_width = 800
+
+            fill_colour = props.get("progressBar_fillColour","white")
+
+            for mgr in self.appleTVManagers:
+                if int(mgr.device_ID) != int(atv_id):
+                    continue
+                device = indigo.devices[mgr.device_ID]
+                try:
+                    pos = int(device.states.get("currentlyPlaying_Position", 0))
+                    total = int(device.states.get("currentlyPlaying_TotalTime", 0))
+                except Exception:
+                    self.logger.debug("State conversion failed", exc_info=True)
+                    pos, total = 0, 0
+
+                img = self._make_progress_bar_png(position=pos, total=total, width_px=bar_width, fill_colour=fill_colour)
+                if img is None:
+                    self.logger.info("Progress bar not generated due to previous error")
+                    return
+
+                file_path = f"{self.saveDirectory}/{mgr.devicename}_progressBar.png"
+                try:
+                    img.save(file_path)
+                except Exception:
+                    self.logger.exception("Saving progress bar PNG failed")
+                    return
+
+                self.logger.debug(f"Progress bar saved to {file_path}")
+                break
+            else:
+                self.logger.info("No progress bar saved – AppleTV manager not found.")
+        except Exception:
+            self.logger.exception("saveProgressBar failed")
+
+    def _sec_to_hms(self, seconds: int) -> str:
+        try:
+            if seconds <= 0:
+                return "0:00"
+            h, rem = divmod(int(seconds), 3600)
+            m, s = divmod(rem, 60)
+            return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+        except Exception:
+            self.logger.exception("_sec_to_hms failed")
+            return "0:00"
+
+        # Build a transparent PIL Image showing a media progress bar with outlined text.
+        # ---------------------------------------------------------------------
+
+
+
+    def _make_progress_bar_png(self, position: int, total: int, width_px: int,
+                               height_px: int = 90, margin_ratio: float = 0.06, fill_colour="white"):
+        """Return a PIL.Image with a progress bar.
+        Labels sit **fully above** the bar:
+          • "0:00" left
+          • current position centred on fill edge
+          • total time right
+        All labels in solid white (same colour as fill)."""
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+
+            total = max(total, 1)
+            position = max(0, min(position, total))
+            pct = position / total
+
+            img = Image.new("RGBA", (width_px, height_px), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+
+            margin = int(width_px * margin_ratio)
+            bar_h = int(height_px * 0.5)
+            y0 = (height_px - bar_h) // 2
+
+            # Draw track and fill
+            draw.rectangle([margin, y0, width_px - margin, y0 + bar_h], fill=(0, 0, 0, 200))
+            fill_x = margin + int((width_px - 2 * margin) * pct)
+            if fill_x > margin:
+                draw.rectangle([margin, y0, fill_x, y0 + bar_h], fill=fill_colour)
+
+            # Larger font (~45 % of bar height)
+            font_sz = max(16, int(bar_h * 0.45))
+            try:
+                font = ImageFont.truetype("Arial.ttf", font_sz)
+            except Exception:
+                font = ImageFont.load_default()
+
+            start_txt = "0:00"
+            end_txt = self._sec_to_hms(total)
+            pos_txt = self._sec_to_hms(position)
+
+            # Vertical position: gap of 2 px above bar
+            lbl_y = y0 - font_sz - 2
+
+            # Start label
+            draw.text((margin, lbl_y), start_txt, font=font, fill=fill_colour)
+
+            # End label
+            end_w = draw.textbbox((0, 0), end_txt, font=font)[2]
+            draw.text((width_px - margin - end_w, lbl_y), end_txt, font=font, fill=fill_colour)
+
+            # Current position centred at fill edge
+            pos_w = draw.textbbox((0, 0), pos_txt, font=font)[2]
+            cx = int(fill_x - pos_w / 2)
+            cx = max(margin, min(cx, width_px - margin - pos_w))
+            draw.text((cx, lbl_y), pos_txt, font=font, fill=fill_colour)
+
+            return img
+        except Exception:
+            self.logger.exception("_make_progress_bar_png failed")
+            return None
+
+
     def saveArtwork(self, valuesDict, typeId):
 
         self.logger.debug(f"saveArtwork Called {valuesDict} & {typeId}")
@@ -2268,6 +2430,8 @@ class Plugin(indigo.PluginBase):
             ]
 
             device.updateStatesOnServer(stateList)
+
+
 
         except:
             self.logger.exception("process_playlist error")

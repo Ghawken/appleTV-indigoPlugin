@@ -1,4 +1,109 @@
-# Update
+# Updates 2025
+
+## Pre release 1.6.14
+
+**1.6.14**
+
+Add progressBar art saving.  Both automatically when updates available, and as a actionGroup
+Width, and Colour modifiable.
+
+Important: Fix for Async issues/timeout on disconnections (primarily seen when stopping/starting the appleTV connection)
+
+Add artwork Modify options:
+None - no change
+Size - Modify and fix aspect ratio for CP use
+Grayscale - On Paused greyscale artwortk
+Overlay - Overlay default (user modifiable) paused symbol to artwork when paused.  (see paused image in Pictures directory)
+eg.
+![https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/Paused-Example.png?raw=true](https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/Paused-Example.png?raw=true)
+
+
+
+![https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/DeviceConfig.png?raw=true](https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/DeviceConfig.png?raw=true)
+
+
+Fixes and changes for above. 
+
+
+**1.6.11**
+
+Set Error status when connection lost/disconnected or not able to be made in Indigo
+
+**1.6.10 -> 1.6.6**
+[Reverted]
+Attempt to push timed updates - however they don't exist.  All the updates being received are all the updates the appleTV is sending.  No point in a timed update.  If long delays between now playing updates (position etc.) on appletv.   Any user interaction stop/pause/play/volume is immediately reported.   Other passive updates - position of current playback - appears pretty intermittent...
+
+**1.6.6**
+
+Filter out non printable Emoji characters and check for (null) may be impacting some apps reporting Title of playback
+
+Add device_state = Finish time of currently playing item.  eg. 3:45PM
+Add device state = Remaining time of currently playing item eg. 1 hr 32 mins
+Add device state = Percentage Complete of currently playing item eg. 32.1%
+
+Fixes for logging/errors/exceptions logging for devices that don't support artwork (HomePods) Sonos Speakers and Airplay2 speakers
+Move to empty strings for device states that are unreported.  Rather than None or Not Available
+
+**1.6.5**
+
+Further testing OS18.4 Companion changes, requiring seperate ID.   (May need repairing once..)
+Add Multiple Simple Commands to Action menu selection  - Top menu, App Switcher, Scren Saver, Skip Forward, Skip Backward, Swipe Left, Right, Up and Down
+Bug fix:  Check for Screen Saver active and turn off if playback command selected.  Previously would have to do this manually.
+
+**1.6.0**
+
+Extension of below Artwork addtitions/changes:  Add Artwork Modify Option
+This greyscales the provided artwork when paused.
+
+It also resizes the provided artwork to a transparent background box width and height is that set in widith (eg square)
+This enables aspect ratio to remain intact for refreshingUrl control page use.
+
+Add AppleTV device settings for Artwork - always updating the artwork if enabled and artwork changes.  Updates on PowerState changes and PlayState changes.   Removes need for Indigo based triggers on playback changes.
+
+
+![https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/DeviceConfig.png?raw=true](https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/DeviceConfig.png?raw=true)
+
+
+Automatically changes artwork thumb if playing, or paused or nothing=everything else.
+
+These files can be changed in the /Pictures directory once they exist and won't be changed.  If wish to go back to plugins default, delete the files and restart the plugin.
+
+Update library - including recent unmerged pull to fix 18.4 companion issue (tested on tvOS 18.4).  Will merge to latest version when released
+
+Update dependencies.
+
+Move default artwork thumbnail (which is used when no playback) to Pictures directory.  On start if doesn't exist will create.  Can be user updated to whatever thumb suits
+
+Update DeviceConfig.png
+
+**1.5.14**
+
+Add AppleTV device settings for Artwork - always updating the artwork if enabled and artwork changes. Updates on PowerState changes and PlayState changes. Removes need for Indigo based triggers on playback changes.
+
+Automatically changes artwork thumb if playing, or paused or nothing=everything else.
+
+These files can be changed in the /Pictures directory once they exist and won't be changed. If wish to go back to plugins default, delete the files and restart the plugin.
+
+Update library - including recent unmerged pull to fix 18.4 companion issue (tested on tvOS 18.4). Will merge to latest version when released
+
+Update dependencies.
+
+Move default artwork thumbnail (which is used when no playback) to Pictures directory. On start if doesn't exist will create. Can be user updated to whatever thumb suits
+
+Update DeviceConfig.png
+
+**1.5.10**
+
+Change to animate default artwork thumb for use in Kiosk Home use, or any web viewer of CP
+Remove Nowplaying details when power off (avoids some persisting given variability in appleTV apps)
+
+**1.5.8**
+
+Add Default Artwork Thumbnail - use this if None or artwork not available. Allows when Artwork changing from something --> Nothing playing, returns back to this artwork.
+
+![https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/appleTV.indigoPlugin/Contents/Server%20Plugin/images/apple-tv-default-thumb-playing.png?raw=true](https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/appleTV.indigoPlugin/Contents/Server%20Plugin/images/apple-tv-default-thumb-playing.png?raw=true)![https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/appleTV.indigoPlugin/Contents/Server%20Plugin/images/apple-tv-default-thumb-paused.png?raw=true](https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/appleTV.indigoPlugin/Contents/Server%20Plugin/images/apple-tv-default-thumb-paused.png?raw=true)
+
+
 # Called appleTV plugin, but supports AirPlay2 devices (!)
 - Live reporting of current state/Playback/Pause and all actions of appleTV- HomePod Control
 - AirPlay 2 compatible Speakers

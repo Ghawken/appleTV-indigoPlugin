@@ -70,9 +70,9 @@
 				   type="textfield"
 				   tooltip="Enter Default Width"
 				   defaultValue="512"   >
-				<Label>Default Width for Artwork:</Label>
+				<Label>Default Width for Artwork/Bar:</Label>
 			</Field>
-			<Field id="artwork_modify_menu" type="menu" tooltip="Automatically Modify artwork pending PlayStatus" defaultValue="None"   >
+			<Field id="artwork_modify_menu" type="menu" tooltip="Automatically Modify artwork pending PlayStatus" defaultValue="None" visibleBindingId="artwork_update" visibleBindingValue="true" >
 				<Label>Modify Artwork:</Label>
 				<List>
             		<Option value="None">No Modification</Option>
@@ -81,14 +81,46 @@
             		<Option value="overlay">On Pause Overlay Paused Image</Option>
 				</List>
 			</Field>
-			<Field id="artwork_overlay_info" type="checkbox" tooltip="Write information into File" defaultValue="False"   >
+			<Field id="artwork_overlay_info" type="checkbox" tooltip="Write information into File" defaultValue="False" visibleBindingId="artwork_update" visibleBindingValue="true"  >
 				<Label>Overlay File Information on Artwork:</Label>
 			</Field>
+			<Field id="artwork_progressBar" type="checkbox" tooltip="Write information into File for ProgressBar" defaultValue="False"   >
+				<Label>Automatically Update Progress Bar:</Label>
+			</Field>
+            <Field id="progressBar_fillColour" type="menu" tooltip="Fill Colour for Bar" defaultValue="white" visibleBindingId="artwork_progressBar" visibleBindingValue="true">
+            <Label>Progress Bar Colour:</Label>
+            <List>
+                <Option value="white">White</Option>
+                <Option value="black">Black</Option>
+                <Option value="red">Red</Option>
+                <Option value="green">Green</Option>
+                <Option value="blue">Blue</Option>
+                <Option value="yellow">Yellow</Option>
+                <Option value="cyan">Cyan</Option>
+                <Option value="magenta">Magenta</Option>
+                <Option value="orange">Orange</Option>
+                <Option value="purple">Purple</Option>
+                <Option value="pink">Pink</Option>
+                <Option value="brown">Brown</Option>
+                <Option value="gray">Gray</Option>
+                <Option value="darkgray">DarkGray</Option>
+                <Option value="lightgray">LightGray</Option>
+                <Option value="gold">Gold</Option>
+                <Option value="silver">Silver</Option>
+                <Option value="lime">Lime</Option>
+                <Option value="navy">Navy</Option>
+                <Option value="teal">Teal</Option>
+                <Option value="olive">Olive</Option>
+                <Option value="maroon">Maroon</Option>
+            </List>
+        </Field>
 
-			    <Field id="infoLabel24" type="label" fontSize='large' fontColor="blue">
+			    <Field id="infoLabel24" type="label" fontSize='large' fontColor="blue" visibleBindingId="artwork_update" visibleBindingValue="true" >
         <Label>Auto Save Artwork:  Automatically save artwork to /Pictures/Indigo-appleTV when any changes detected
 Default Width:   Width for Artwork
 Modify Artwork:  Modify given Artwork depending on playstatus.   Fit given artwork into square box Width wide/high maintaining aspect ratio
+Overlay Information:   Write Title and Finish Time Bottom of Artwork.
+Progress Bar:  Update progress Bar file whenever need playstatus info
 		</Label>
 				</Field>
 			        <Field id="sep7e" type="separator"/>

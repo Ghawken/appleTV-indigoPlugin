@@ -98,6 +98,8 @@ eg %%d:123456:album%%.
     </Field>
 
         </ConfigUI>
+
+
     </Action>
            <Action id="saveArtwork">
         <Name>Save current Artwork</Name>
@@ -124,6 +126,61 @@ Will maintain aspect ratio and auto adjust Height.
 
         </ConfigUI>
     </Action>
+
+<Action id="saveProgressBar">
+        <Name>Save Progress Bar</Name>
+        <CallbackMethod>saveProgressBar</CallbackMethod>
+        <ConfigUI>
+			<Field id="appleTV" type="menu" defaultValue="0" tooltip="select appleTV " dynamicReload="True">
+				 <List class="indigo.devices" filter="self.appleTV"/>
+				<Label>Select Apple Tv:</Label>
+                <CallbackMethod>menu_callback</CallbackMethod>
+			</Field>
+            <Field id="width" type="textfield" defaultValue="">
+                <Label>Width (optional):</Label>
+            </Field>
+            <Field id="progressBar_fillColour" type="menu" tooltip="Fill Colour for Bar" defaultValue="white">
+            <Label>Bar Colour:</Label>
+            <List>
+                <Option value="white">White</Option>
+                <Option value="black">Black</Option>
+                <Option value="red">Red</Option>
+                <Option value="green">Green</Option>
+                <Option value="blue">Blue</Option>
+                <Option value="yellow">Yellow</Option>
+                <Option value="cyan">Cyan</Option>
+                <Option value="magenta">Magenta</Option>
+                <Option value="orange">Orange</Option>
+                <Option value="purple">Purple</Option>
+                <Option value="pink">Pink</Option>
+                <Option value="brown">Brown</Option>
+                <Option value="gray">Gray</Option>
+                <Option value="darkgray">DarkGray</Option>
+                <Option value="lightgray">LightGray</Option>
+                <Option value="gold">Gold</Option>
+                <Option value="silver">Silver</Option>
+                <Option value="lime">Lime</Option>
+                <Option value="navy">Navy</Option>
+                <Option value="teal">Teal</Option>
+                <Option value="olive">Olive</Option>
+                <Option value="maroon">Maroon</Option>
+            </List>
+        </Field>
+
+
+    <Field id="infoLabel1002" type="label" fontSize='large' fontColor="blue">
+        <Label>
+Progress Bar will be saved to User/Pictures/Indigo-AppleTV/ Folder.
+Width can be unspecified in which case default of 512 used. .
+		</Label>
+    </Field>
+            <Field id="anothersimpleSeparator3a3aa" type="separator"/>
+
+
+        </ConfigUI>
+    </Action>
+
+
  <Action id="updateIP">
         <Name>Manually Update IP Address</Name>
         <CallbackMethod>force_ipaddress</CallbackMethod>
