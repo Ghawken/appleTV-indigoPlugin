@@ -15,7 +15,12 @@ Size - Modify and fix aspect ratio for CP use
 Grayscale - On Paused greyscale artwortk
 Overlay - Overlay default (user modifiable) paused symbol to artwork when paused.  (see paused image in Pictures directory)
 eg.
+
 ![https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/Paused-Example.png?raw=true](https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/Paused-Example.png?raw=true)
+
+
+Adds option for Overlay File information on Artwork
+Adds Title and Finish time at Bottom as example
 
 
 
