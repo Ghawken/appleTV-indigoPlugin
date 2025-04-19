@@ -402,7 +402,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
             if artwork_progressBar:
                 if self.plugin.debug2:
                     self.plugin.logger.debug(f"Updating ProgressBar as playstate changed and Autosave Artwork selected.")
-                self.plugin.save_progress_bar_for_device(device, bar_width=width_int, colour=artwork_progressBar_colour)
+                self.plugin.save_progress_bar_for_device(device, playstatus, bar_width=width_int, colour=artwork_progressBar_colour)
 
 
         except Exception:
@@ -663,7 +663,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                     final = self._draw_info_overlay(final)
 
                 final.save(filename)
-                self.plugin.logger.debug(f"Processed '{mode}' saved to {filename}")
+                self.plugin.logger.debug(f"Processed '{mode=}' saved to {filename=}")
                 self.last_artworkid = artworkID
                 self.last_artwork_modify = mode
 
@@ -2032,27 +2032,58 @@ class Plugin(indigo.PluginBase):
     # ================================================
     # New helper to create progress bar directly from a device (no valuesDict)
     # ================================================
-    def save_progress_bar_for_device(self, device, bar_width: int = 800, colour="white"):
-        """Generate/overwrite <DeviceName>_progressBar.png for the given Indigo device."""
+    # =========================================================
+    def save_progress_bar_for_device(self, device, playstatus, bar_width: int = 800, colour="white"):
+        """Generate / overwrite  <DeviceName>_progressBar.png  using live playstatus data."""
         try:
-            # Extract playback states
-            try:
-                pos = int(device.states.get("currentlyPlaying_Position", 0))
-                total = int(device.states.get("currentlyPlaying_TotalTime", 0))
-            except Exception:
-                self.logger.debug("State conversion failed", exc_info=False)
-                pos, total = 0, 0
+            inactive_states = {
+                None,
+                pyatv.const.DeviceState.Idle,
+                pyatv.const.DeviceState.Loading,
+                pyatv.const.DeviceState.Stopped,
+            }
+            state = getattr(playstatus, "device_state", None)
 
-            img = self._make_progress_bar_png(position=pos, total=total, width_px=bar_width, fill_colour=colour)
+            if playstatus is None or state in inactive_states:
+                # Create a blank, fully‑transparent image matching bar size.
+                try:
+                    bar_height = 70  # must match _make_progress_bar_png default
+                    img = Image.new("RGBA", (bar_width, bar_height), (0, 0, 0, 0))
+                    file_path = f"{self.saveDirectory}/{device.name}_progressBar.png"
+                    img.save(file_path)
+                    self.logger.debug(f"Blank progress bar saved to {file_path}")
+                except Exception:
+                    self.logger.debug("Creating blank progress bar failed", exc_info=True)
+                return  # exit after blank save
+
+            total_time_str = f"{getattr(playstatus, 'total_time', '')}"
+            current_position_str = f"{getattr(playstatus, 'position', '')}"
+
+            try:
+                total = int(total_time_str) if total_time_str.strip() else 0
+            except ValueError:
+                total = 0
+
+            try:
+                pos = int(current_position_str) if current_position_str.strip() else 0
+            except ValueError:
+                pos = 0
+
+            # ── build the bar ────────────────────────────────────────────────────
+            img = self._make_progress_bar_png(position=pos,
+                                              total=total,
+                                              width_px=bar_width,
+                                              fill_colour=colour)
             if img is None:
-                self.logger.debug("Progress bar not generated due to previous error")
+                self.logger.debug("Progress bar not generated (make failed)")
                 return
+
             file_path = f"{self.saveDirectory}/{device.name}_progressBar.png"
             img.save(file_path)
             self.logger.debug(f"Progress bar saved to {file_path}")
+
         except Exception:
             self.logger.exception("save_progress_bar_for_device failed")
-
 
     def saveProgressBar(self, valuesDict, typeId):
         """Generate <DeviceName>_progressBar.png reflecting current playback."""
@@ -2114,69 +2145,82 @@ class Plugin(indigo.PluginBase):
 
         # Build a transparent PIL Image showing a media progress bar with outlined text.
         # ---------------------------------------------------------------------
+    def _make_progress_bar_png(
+            self,
+            position: int,
+            total: int,
+            width_px: int,
+            height_px: int = 70,
+            margin_ratio: float = 0.06,
+            fill_colour: str = "white"):
+        """
+        Transparent PNG progress bar.
 
-
-
-    def _make_progress_bar_png(self, position: int, total: int, width_px: int,
-                               height_px: int = 90, margin_ratio: float = 0.06, fill_colour="white"):
-        """Return a PIL.Image with a progress bar.
-        Labels sit **fully above** the bar:
-          • "0:00" left
-          • current position centred on fill edge
-          • total time right
-        All labels in solid white (same colour as fill)."""
+        Labels:
+          • "0:00"   hard‑left  (hidden if it would collide with position label)
+          • position centred on fill edge
+          • remaining time hard‑right (hidden if it would collide with position label)
+        """
         try:
-            from PIL import Image, ImageDraw, ImageFont
-
+            # ----------- sanitise ----------------------------------------------
             total = max(total, 1)
             position = max(0, min(position, total))
+            remaining = total - position
             pct = position / total
 
             img = Image.new("RGBA", (width_px, height_px), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
-
             margin = int(width_px * margin_ratio)
-            bar_h = int(height_px * 0.5)
+            bar_h = int(height_px * 0.50)
             y0 = (height_px - bar_h) // 2
+            bar_left, bar_right = margin, width_px - margin
 
-            # Draw track and fill
-            draw.rectangle([margin, y0, width_px - margin, y0 + bar_h], fill=(0, 0, 0, 200))
-            fill_x = margin + int((width_px - 2 * margin) * pct)
-            if fill_x > margin:
-                draw.rectangle([margin, y0, fill_x, y0 + bar_h], fill=fill_colour)
+            # ---------------- bar ----------------------------------------------
+            draw.rectangle([bar_left, y0, bar_right, y0 + bar_h],
+                           fill=(0, 0, 0, 200))
+            fill_x = bar_left + int((bar_right - bar_left) * pct)
+            if fill_x > bar_left:
+                draw.rectangle([bar_left, y0, fill_x, y0 + bar_h],
+                               fill=fill_colour)
 
-            # Larger font (~45 % of bar height)
+            # ---------------- labels -------------------------------------------
             font_sz = max(16, int(bar_h * 0.45))
             try:
                 font = ImageFont.truetype("Arial.ttf", font_sz)
             except Exception:
                 font = ImageFont.load_default()
 
+            def _w(txt: str) -> int:
+                return draw.textbbox((0, 0), txt, font=font)[2]
+
             start_txt = "0:00"
-            end_txt = self._sec_to_hms(total)
             pos_txt = self._sec_to_hms(position)
+            end_txt = self._sec_to_hms(remaining)
 
-            # Vertical position: gap of 2 px above bar
-            lbl_y = y0 - font_sz - 2
+            start_w = _w(start_txt)
+            pos_w = _w(pos_txt)
+            end_w = _w(end_txt)
 
-            # Start label
-            draw.text((margin, lbl_y), start_txt, font=font, fill=fill_colour)
+            lbl_y = y0 - font_sz - 2  # 2‑px gap above bar
 
-            # End label
-            end_w = draw.textbbox((0, 0), end_txt, font=font)[2]
-            draw.text((width_px - margin - end_w, lbl_y), end_txt, font=font, fill=fill_colour)
+            # Position label first (centre on fill edge, clamped)
+            pos_x = max(bar_left, min(fill_x - pos_w // 2, bar_right - pos_w))
+            draw.text((pos_x, lbl_y), pos_txt, font=font, fill=fill_colour)
 
-            # Current position centred at fill edge
-            pos_w = draw.textbbox((0, 0), pos_txt, font=font)[2]
-            cx = int(fill_x - pos_w / 2)
-            cx = max(margin, min(cx, width_px - margin - pos_w))
-            draw.text((cx, lbl_y), pos_txt, font=font, fill=fill_colour)
+            # Draw start label only if it doesn't collide with position label
+            if pos_x - 4 > bar_left + start_w:  # 4‑px gap
+                draw.text((bar_left, lbl_y), start_txt, font=font, fill=fill_colour)
+
+            # Draw end label only if it doesn't collide with position label
+            end_x = bar_right - end_w
+            if pos_x + pos_w + 4 < end_x:  # 4‑px gap
+                draw.text((end_x, lbl_y), end_txt, font=font, fill=fill_colour)
 
             return img
+
         except Exception:
             self.logger.exception("_make_progress_bar_png failed")
             return None
-
 
     def saveArtwork(self, valuesDict, typeId):
 
