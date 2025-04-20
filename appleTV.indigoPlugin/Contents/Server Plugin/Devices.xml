@@ -56,38 +56,49 @@
         <Label>Submit PinCode (if requested)</Label>
 				<CallbackMethod>submitCode</CallbackMethod>
 		</Field>
+
+
 			<Field id="simpleSeparator1233" type="separator"/>
-			  <Field id="infoLabel22" type="label" fontSize='large' fontColor="blue">
+
+			  <Field id="infoLabel22" type="label" fontSize='large' fontColor="black" alignText="left" visibleBindingId="isPaired" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true" >
         		<Label>Device Artwork Settings:</Label>
-    			</Field>
+			  </Field>
+
 			<Field id="artwork_update"
 				   type="checkbox"
 				   tooltip="Automatically Download artwork if status changes"
-				   defaultValue="false"   >
+				   defaultValue="false" visibleBindingId="isPaired" visibleBindingValue="true"
+				   alignText="right"
+			>
 				<Label>Auto Save Artwork:</Label>
 			</Field>
-						<Field id="artwork_width"
+
+			<Field id="artwork_width"
 				   type="textfield"
 				   tooltip="Enter Default Width"
-				   defaultValue="512"   >
+				   defaultValue="512" visibleBindingId="artwork_update" visibleBindingValue="true"  >
 				<Label>Default Width for Artwork/Bar:</Label>
 			</Field>
-			<Field id="artwork_modify_menu" type="menu" tooltip="Automatically Modify artwork pending PlayStatus" defaultValue="None" visibleBindingId="artwork_update" visibleBindingValue="true" >
+
+			<Field id="artwork_modify_menu" type="menu" tooltip="Automatically Modify artwork pending PlayStatus" defaultValue="None" alwaysUseInDialogHeightCalc="true" visibleBindingId="artwork_update" visibleBindingValue="true" >
 				<Label>Modify Artwork:</Label>
 				<List>
-            		<Option value="None">No Modification</Option>
-            		<Option value="size">Aspect Ratio Only</Option>
-            		<Option value="grayscale">On Pause Greyscale Artwork</Option>
-            		<Option value="overlay">On Pause Overlay Paused Image</Option>
+            		<Option value="None">No modification</Option>
+            		<Option value="size">Aspect ratio fix only</Option>
+            		<Option value="grayscale">On pause grayscale artwork</Option>
+            		<Option value="overlay">On pause overlay paused image</Option>
 				</List>
 			</Field>
-			<Field id="artwork_overlay_info" type="checkbox" tooltip="Write information into File" defaultValue="False" visibleBindingId="artwork_update" visibleBindingValue="true"  >
+
+			<Field id="artwork_overlay_info" type="checkbox" tooltip="Write information into File" defaultValue="False" visibleBindingId="artwork_update" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true" >
 				<Label>Overlay File Information on Artwork:</Label>
 			</Field>
-			<Field id="artwork_progressBar" type="checkbox" tooltip="Write information into File for ProgressBar" defaultValue="False"   >
+
+			<Field id="artwork_progressBar" type="checkbox" tooltip="Write information into File for ProgressBar" defaultValue="false" visibleBindingId="artwork_update" visibleBindingValue="true"  alwaysUseInDialogHeightCalc="true"   >
 				<Label>Automatically Update Progress Bar:</Label>
 			</Field>
-            <Field id="progressBar_fillColour" type="menu" tooltip="Fill Colour for Bar" defaultValue="white" visibleBindingId="artwork_progressBar" visibleBindingValue="true">
+
+            <Field id="progressBar_fillColour" type="menu" tooltip="Fill Colour for Bar" defaultValue="white" visibleBindingId="artwork_progressBar" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
             <Label>Progress Bar Colour:</Label>
             <List>
                 <Option value="white">White</Option>
@@ -114,16 +125,16 @@
                 <Option value="maroon">Maroon</Option>
             </List>
         </Field>
-
-			    <Field id="infoLabel24" type="label" fontSize='large' fontColor="blue" visibleBindingId="artwork_update" visibleBindingValue="true" >
-        <Label>Auto Save Artwork:  Automatically save artwork to /Pictures/Indigo-appleTV when any changes detected
+		<Field id="infoLabel24" type="label" fontSize='large' fontColor="blue" visibleBindingId="artwork_update" visibleBindingValue="true" >
+		<Label>Auto Save Artwork:  Automatically save artwork to /Pictures/Indigo-appleTV when any changes detected
 Default Width:   Width for Artwork
 Modify Artwork:  Modify given Artwork depending on playstatus.   Fit given artwork into square box Width wide/high maintaining aspect ratio
 Overlay Information:   Write Title and Finish Time Bottom of Artwork.
 Progress Bar:  Update progress Bar file whenever need playstatus info
 		</Label>
-				</Field>
-			        <Field id="sep7e" type="separator"/>
+		</Field>
+
+		<Field id="sep7e" type="separator" visibleBindingId="isPaired" visibleBindingValue="true" ></Field>
 
 
 			<Field	  id="Name"		readonly="true"	fontColor="grey"  type="textfield">

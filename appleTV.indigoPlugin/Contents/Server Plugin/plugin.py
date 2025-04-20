@@ -40,7 +40,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 ## test, base import
 ## redo imports after installation
-
+from types import SimpleNamespace
 import SimpleCommands
 
 import pyatv
@@ -183,6 +183,11 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         self.last_artwork_mode = ""
         self.last_artworkid = ""
         self.last_artwork_modify = ""
+        ## Modify position
+        self._last_playstatus = None  # latest Playing object
+        self._last_pos_secs = 0
+        self._last_total_secs = 0
+        self._last_update_epoch = 0.0
         self.devicename = devicename
         self._app_list = None
         self.all_features = None
@@ -431,14 +436,13 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
     def disconnect(self):
         """Schedule async cleanup in the loop thread and wait for it."""
         self.plugin.logger.debug("Disconnecting from device")
-
        # run the coroutine safely in the event‑loop thread
         fut = asyncio.run_coroutine_threadsafe(self._async_cleanup(), self.loop)
         # Optional: block until cleanup finished (or add timeout)
         try:
             fut.result(timeout=10)
         except Exception:
-            self.plugin.logger.exception("Async cleanup failed")
+            self.plugin.logger.debug("Async cleanup failed", exc_info=True)
 
     async def _async_cleanup(self):
         self.is_on = False
@@ -475,11 +479,72 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         self.plugin.logger.info(f"Connection to appleTV - {self.devicename} closed.")
         self._killConnection = True
 
+    def _tick_position(self):
+        """Increment cached position and push to Indigo if still Playing."""
+        if (
+                self._last_playstatus is None
+                or self._last_playstatus.device_state != pyatv.const.DeviceState.Playing
+        ):
+            return  # nothing to do
+
+        now = time.time()
+        delta = int(now - self._last_update_epoch)
+        if delta <= 0:
+            return
+
+        self._last_pos_secs = min(
+            self._last_pos_secs + delta,
+            self._last_total_secs or 0
+        )
+        self._last_update_epoch = now
+
+        # —— push synthetic values ——
+        device = indigo.devices[self.deviceid]
+        remaining_seconds = max(self._last_total_secs - self._last_pos_secs, 0)
+        finish_time_str = (
+            (datetime.datetime.now() + datetime.timedelta(seconds=remaining_seconds))
+            .strftime("%I:%M %p")
+            .lstrip("0") if remaining_seconds else ""
+        )
+        percent_complete = (
+            f"{self._last_pos_secs / self._last_total_secs:.1%}"
+            if self._last_total_secs else ""
+        )
+
+        device.updateStatesOnServer((
+            {"key": "currentlyPlaying_Position", "value": str(self._last_pos_secs)},
+            {"key": "currentlyPlaying_finishTime", "value": finish_time_str},
+            {"key": "currentlyPlaying_remainingTime",
+             "value": self.plugin.seconds_to_time_remaining(remaining_seconds)},
+            {"key": "currentlyPlaying_percentComplete", "value": percent_complete},
+        ))
+
+        artwork_progress_bar = device.pluginProps.get("artwork_progressBar", False)
+        if artwork_progress_bar:
+            bar_colour = device.pluginProps.get("progressBar_fillColour", "white")
+            # build a minimal Playing‑like object with the up‑to‑date numbers
+            fake_status = SimpleNamespace(
+                position=self._last_pos_secs,
+                total_time=self._last_total_secs,
+                device_state=pyatv.const.DeviceState.Playing,
+            )
+            self.plugin.save_progress_bar_for_device(
+                device,
+                playstatus=fake_status,
+                bar_width=800,
+                colour=bar_colour,
+            )
+
     def playstatus_update(self, updater, playstatus: pyatv.interface.Playing) -> None:
         """Call when play status was updated."""
         try:
             self.plugin.logger.debug(f"Playstatus Update Called for {self.devicename}")
             self.plugin.logger.debug(f"& PlayStatus\n {playstatus}")
+
+            self._last_playstatus = playstatus
+            self._last_pos_secs = int(playstatus.position or 0)
+            self._last_total_secs = int(playstatus.total_time or 0)
+            self._last_update_epoch = time.time()
             self.playstatus_time = time.time()
             self.plugin.logger.debug(f"PlayStatus Time updated: {time.time()-self.playstatus_time}")
             try:
@@ -668,7 +733,9 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                 self.last_artwork_modify = mode
 
         except pyatv.exceptions.NotSupportedError:
-            self.plugin.logger.info("Artwork not supported for this device.")
+            self.plugin.logger.debug("Artwork not supported for this device.")
+            if self.plugin.debug2:
+                self.plugin.logger.info("Artwork not supported for this device.  Suggest setting is turned off to avoid this message.")
         except Exception:
             self.plugin.logger.exception("async artwork save exception")
 
@@ -1144,9 +1211,13 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
 
                         except pyatv.exceptions.NotSupportedError:
                             pass
-
+                    last_tick = time.time()
                     while True:
                         await asyncio.sleep(2)
+                        # call _tick_position() about every 10 s
+                        if time.time() - last_tick >= 10:
+                            self._tick_position()
+                            last_tick = time.time()
                         #self.plugin.logger.debug(f"Within main sleep 20 second loop killconnection {self._killConnection}")
                         if self._killConnection:
                             self._killConnection = False
@@ -2379,7 +2450,7 @@ class Plugin(indigo.PluginBase):
         return f"{hours} hr {minutes} min" if hours > 0 else f"{minutes} min"
 
 
-    async def process_playstatus(self, playstatus,  atv, time_start,deviceid, isAppleTV):
+    async def process_playstatus(self, playstatus,  atv, time_start, deviceid, isAppleTV):
         try:
             #self.logger.debug(f"Process PlayStatus Called {playstatus}, {atv}, {atv.metadata} {time_start} and IndigoDeviceID {deviceid} ")
             #self.logger.debug(f"PlayState DEVICE_state {playstatus.device_state}")
