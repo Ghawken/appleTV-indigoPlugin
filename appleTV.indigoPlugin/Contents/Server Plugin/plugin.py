@@ -680,15 +680,12 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
 
             # Immediate fallback if no valid ID or no artwork
             if artworkID is None or artworkID == '' or artwork is None:
-                await self._save_default(filename, state)
+                await self._save_default(filename, state, width, artwork_modify, artwork_overlay_info, paused)
                 return
 
             # Raw mode
             if artwork_modify in (None, "None"):
                 # If ID blank, use default instead of raw
-                if not artworkID:
-                    await self._save_default(filename, state)
-                    return
                 if self.last_artworkid != artworkID or self.last_artwork_modify is not None:
                     with open(filename, 'wb') as f:
                         f.write(artwork.bytes)
@@ -739,22 +736,80 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         except Exception:
             self.plugin.logger.exception("async artwork save exception")
 
-    # Helper to copy default
-    async def _save_default(self, filename, state):
-        fallback = 'apple-tv-default-thumb-nothing.png'
-        default_id = 'Default_Image'
+    async def _save_default(self, filename, state, width,
+                            artwork_modify: str | None = None,
+                            artwork_overlay_info: bool = False,
+                            paused: bool = False):
+        """
+        Fallback artwork when no real artworkID:
+
+        • Playing/Paused → load & process apple‑tv‑default-thumb.png
+        • Other states   → blank transparent square (size=width)
+          (overlays/info only applied in the Playing/Paused branch)
+        """
+        # Determine logical ID for play‑state
         if state == pyatv.const.DeviceState.Playing:
-            fallback = 'apple-tv-default-thumb-playing.png';
-            default_id = 'Default_Image_Playing'
+            default_id = "Default_Image_Playing"
         elif state == pyatv.const.DeviceState.Paused:
-            fallback = 'apple-tv-default-thumb-paused.png';
-            default_id = 'Default_Image_Paused'
-        if self.last_artworkid != default_id:
-            src = os.path.join(self.plugin.saveDirectory, fallback)
-            shutil.copy(src, filename)
-            self.plugin.logger.debug(f"Default '{fallback}' used {filename}")
-            self.last_artworkid = default_id
-            self.last_artwork_modify = None
+            default_id = "Default_Image_Paused"
+        else:
+            default_id = "Default_Image_None"
+
+        # If nothing changed, skip
+        if self.last_artworkid == default_id and self.last_artwork_modify == artwork_modify:
+            return
+
+        try:
+            # ─── NON‑PLAYING branch: blank PNG, no overlays ───────────────────
+            if state not in (pyatv.const.DeviceState.Playing, pyatv.const.DeviceState.Paused):
+                blank = Image.new("RGBA", (width, width), (0, 0, 0, 0))
+                blank.save(filename)
+                self.plugin.logger.debug(f"_save_default: blank for state={state} → {filename}")
+                self.last_artworkid = default_id
+                self.last_artwork_modify = artwork_modify
+                return
+
+            # ─── PLAYING/PAUSED branch: load base thumb and apply mods ─────────
+            base_path = os.path.join(self.plugin.saveDirectory, "apple-tv-default-thumb.png")
+            img = Image.open(base_path).convert("RGBA")
+
+            # square‑resize + optional grayscale
+            final = self.process_to_square(
+                img,
+                box_size=width,
+                to_grayscale=(artwork_modify == "grayscale")
+            )
+
+            # overlay icon only if requested & paused
+            if artwork_modify == "overlay" and paused:
+                ov_path = os.path.join(self.plugin.saveDirectory,
+                                       "apple-tv-default-thumb-overlay.png")
+                try:
+                    ov = Image.open(ov_path).convert("RGBA")
+                    ol = int(width * 0.7)
+                    ov = ov.resize((ol, ol), Image.LANCZOS)
+                    pos = ((width - ol) // 2, (width - ol) // 2)
+                    final.paste(ov, pos, mask=ov)
+                except Exception:
+                    if self.plugin.debug2:
+                        self.plugin.logger.exception(f"Overlay failed ({ov_path})")
+
+            # info overlay if requested
+            if artwork_overlay_info:
+                final = self._draw_info_overlay(final)
+
+            final.save(filename)
+            self.plugin.logger.debug(f"_save_default: processed for state={state}, mode={artwork_modify} → {filename}")
+
+        except Exception:
+            # fallback to blank
+            blank = Image.new("RGBA", (width, width), (0, 0, 0, 0))
+            blank.save(filename)
+            self.plugin.logger.exception("_save_default failed, wrote blank PNG")
+
+        # record state
+        self.last_artworkid = default_id
+        self.last_artwork_modify = artwork_modify
 
     def process_to_square(self, img, box_size, to_grayscale=False):
         """
@@ -772,6 +827,29 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         y = (box_size - new.height) // 2
         canvas.paste(new, (x, y), mask=new)
         return canvas
+
+    def _process_frame(self, pil_img, artwork_modify, paused, info):
+        """Return a new RGBA PIL.Image after size/grayscale/overlay/info."""
+        # resize‑square
+        frame = self.process_to_square(
+            pil_img.convert("RGBA"),
+            box_size=pil_img.width,
+            to_grayscale=(artwork_modify == "grayscale")
+        )
+        # overlay icon (only when paused + overlay mode)
+        if artwork_modify == "overlay" and paused:
+            ov_path = os.path.join(self.plugin.saveDirectory, "apple-tv-default-thumb-overlay.png")
+            ov = Image.open(ov_path).convert("RGBA")
+            ol = int(frame.width * 0.7)
+            frame.paste(
+                ov.resize((ol, ol), Image.LANCZOS),
+                ((frame.width - ol) // 2, (frame.height - ol) // 2),
+                mask=ov
+            )
+        # info overlay
+        if info:
+            frame = self._draw_info_overlay(frame)
+        return frame
 
     def _draw_info_overlay(self, img):
         """
@@ -1376,9 +1454,7 @@ class Plugin(indigo.PluginBase):
         try:
             # List of default image filenames to copy.
             default_files = [
-                "apple-tv-default-thumb-nothing.png",
-                "apple-tv-default-thumb-playing.png",
-                "apple-tv-default-thumb-paused.png",
+                "apple-tv-default-thumb.png",
                 "apple-tv-default-thumb-overlay.png"
             ]
             for filename in default_files:
@@ -2177,7 +2253,8 @@ class Plugin(indigo.PluginBase):
 
             file_path = f"{self.saveDirectory}/{device.name}_progressBar.png"
             img.save(file_path)
-            self.logger.debug(f"Progress bar saved to {file_path}")
+            if self.debug2:
+                self.logger.debug(f"Progress bar saved to {file_path}")
 
         except Exception:
             self.logger.exception("save_progress_bar_for_device failed")
