@@ -1,6 +1,33 @@
 # Updates 2025
 
-## Pre release 1.6.14
+## Pre release 1.7.01
+
+![https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/Paused-Example.png?raw=true](https://github.com/Ghawken/appleTV-indigoPlugin/blob/master/Images/Paused-Example.png?raw=true)
+
+Artwork example with Paused and Info within Artwork.
+
+**1.7.01**
+
+Remove massive animated png default thumbs.   Consolidate default thumbs to 2 only:
+1 
+apple-tv-default-thumb.png, and
+2 
+apple-tv-default-thumb-paused-overlay.png   (Overlay this image on artwork when paused if selected)
+
+Both these are user replacement in the Pictures/Indigo-appleTV directory.   To return to defaults, delete them and restart the plugin.
+
+Apply all artwork modifications to default artwork (which wasn't possible with APNG)
+
+1.7.0
+
+Programmatically calculate the playing position.  Updated whenever receives new playstate information.
+Update progressBar and device states every 10 seconds, based on this calculated playstate.
+Re-style Edit device Settings - hide artwork dialog unless Paired completed.
+Hide exception logging if new async disconnect timeouts (as already closed)
+
+Remove artwork logging - particularly for devices that don't support artwork (Airplay2 Speakers/Receivers)
+
+
 
 **1.6.14**
 
