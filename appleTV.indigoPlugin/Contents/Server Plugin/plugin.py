@@ -708,7 +708,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
 
                 # Overlay on paused
                 if mode == 'overlay' and paused:
-                    overlay_path = os.path.join(self.plugin.saveDirectory, 'apple-tv-default-thumb-overlay.png')
+                    overlay_path = os.path.join(self.plugin.saveDirectory, 'apple-tv-default-thumb-paused-overlay.png')
                     try:
                         overlay = Image.open(overlay_path).convert('RGBA')
                         ol = int(width * 0.7)
@@ -783,7 +783,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
             # overlay icon only if requested & paused
             if artwork_modify == "overlay" and paused:
                 ov_path = os.path.join(self.plugin.saveDirectory,
-                                       "apple-tv-default-thumb-overlay.png")
+                                       "apple-tv-default-thumb-paused-overlay.png")
                 try:
                     ov = Image.open(ov_path).convert("RGBA")
                     ol = int(width * 0.7)
@@ -827,29 +827,6 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         y = (box_size - new.height) // 2
         canvas.paste(new, (x, y), mask=new)
         return canvas
-
-    def _process_frame(self, pil_img, artwork_modify, paused, info):
-        """Return a new RGBA PIL.Image after size/grayscale/overlay/info."""
-        # resize‑square
-        frame = self.process_to_square(
-            pil_img.convert("RGBA"),
-            box_size=pil_img.width,
-            to_grayscale=(artwork_modify == "grayscale")
-        )
-        # overlay icon (only when paused + overlay mode)
-        if artwork_modify == "overlay" and paused:
-            ov_path = os.path.join(self.plugin.saveDirectory, "apple-tv-default-thumb-overlay.png")
-            ov = Image.open(ov_path).convert("RGBA")
-            ol = int(frame.width * 0.7)
-            frame.paste(
-                ov.resize((ol, ol), Image.LANCZOS),
-                ((frame.width - ol) // 2, (frame.height - ol) // 2),
-                mask=ov
-            )
-        # info overlay
-        if info:
-            frame = self._draw_info_overlay(frame)
-        return frame
 
     def _draw_info_overlay(self, img):
         """
@@ -1455,7 +1432,7 @@ class Plugin(indigo.PluginBase):
             # List of default image filenames to copy.
             default_files = [
                 "apple-tv-default-thumb.png",
-                "apple-tv-default-thumb-overlay.png"
+                "apple-tv-default-thumb-paused-overlay.png"
             ]
             for filename in default_files:
                 # Path to the default image inside the plugin folder.
