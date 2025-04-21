@@ -528,10 +528,19 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                 total_time=self._last_total_secs,
                 device_state=pyatv.const.DeviceState.Playing,
             )
+            artwork_width = device.pluginProps.get("artworkWidth", 512)
+            try:
+                width_int = int(artwork_width)
+            except (ValueError, TypeError):
+                if self.plugin.debug2:
+                    self.plugin.logger.debug(
+                        f"Unable to convert width '{artwork_width}' to integer. Using default sizing.")
+                width_int = 512
+
             self.plugin.save_progress_bar_for_device(
                 device,
                 playstatus=fake_status,
-                bar_width=800,
+                bar_width=width_int,
                 colour=bar_colour,
             )
 
@@ -771,7 +780,24 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
 
             # ─── PLAYING/PAUSED branch: load base thumb and apply mods ─────────
             base_path = os.path.join(self.plugin.saveDirectory, "apple-tv-default-thumb.png")
-            img = Image.open(base_path).convert("RGBA")
+            orig = Image.open(base_path) #.convert("RGBA")
+
+            # ── New: if animated & not paused, just copy the full APNG ──────
+            if getattr(orig, "is_animated", False) and not paused:
+                shutil.copy(base_path, filename)
+                self.plugin.logger.debug(
+                    f"_save_default: copied full APNG for state={state} → {filename}"
+                )
+                self.last_artworkid = default_id
+                self.last_artwork_modify = artwork_modify
+                return
+                # Convert to RGBA for downstream processing
+            # If this is an APNG, and we’re paused, grab only the first frame:
+            if getattr(orig, "is_animated", False):
+                orig.seek(0)
+                img = orig.convert("RGBA")
+            else:
+                img = orig.convert("RGBA")
 
             # square‑resize + optional grayscale
             final = self.process_to_square(
