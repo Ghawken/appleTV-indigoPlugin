@@ -55,7 +55,8 @@ from pyatv.const import (
     ShuffleState,
     PairingRequirement
 )
-from pyatv.interface import DeviceListener, PowerListener, AudioListener, PushListener
+from pyatv.interface import DeviceListener, PowerListener, AudioListener, PushListener, OutputDevice
+from pyatv.core import AbstractPushUpdater, OutputDeviceState, SetupData, UpdatedState
 from pyatv.protocols.companion import CompanionAPI, MediaControlCommand, SystemStatus
 from pyatv.core.facade import FacadeRemoteControl, FacadeTouchGestures
 import pyatv.exceptions
@@ -203,6 +204,23 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         self.playstatus_time = time.time()
         self._task = self.loop.create_task( self.loop_atv(self.loop, atv_config=self.atv_config, deviceid=self.deviceid) )
 
+    def volume_device_update(
+        self, output_device: OutputDevice, old_level: float, new_level: float
+    ) -> None:
+        """State of output device volume changed."""
+        self.plugin.logger.info(
+            self.formatter(
+                output(
+                    True,
+                    values={
+                        "output_device_id": output_device.identifier,
+                        "old_level": old_level,
+                        "new_level": new_level,
+                    },
+                )
+            ),
+            flush=True,
+        )
 
     def volume_update(self, old_level: float, new_level: float):
         try:
