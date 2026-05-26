@@ -1384,6 +1384,7 @@ class Plugin(indigo.PluginBase):
         self.logger.addHandler(self.indigo_log_handler)
         self.forceAllDiscovery = False
         self.pathtoPlugin = os.getcwd()
+
         try:
             import pyatv
         except ImportError:
