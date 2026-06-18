@@ -2,7 +2,7 @@
 
 # appleTV Plugin for Indigo
 
-[![Version](https://img.shields.io/badge/version-1.8.0-blue)](https://github.com/Ghawken/appleTV-indigoPlugin/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.8.1-blue)](https://github.com/Ghawken/appleTV-indigoPlugin/releases/latest)
 [![Indigo](https://img.shields.io/badge/Indigo-2023.2%2B-green)](https://www.indigodomo.com)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://python.org)
 [![License](https://img.shields.io/github/license/Ghawken/appleTV-indigoPlugin)](LICENSE)

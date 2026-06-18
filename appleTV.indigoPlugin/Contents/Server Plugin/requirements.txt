@@ -1,6 +1,8 @@
 homekitlink_ffmpeg
-pyatv==0.17.0
-aiohttp==3.13.3
+# Pinned to master HEAD (2026-06-17) — includes PR #2855 (TVRCSessionStart + _systemInfo _i fix for tvOS 26)
+# No pyatv release has been cut yet; switch back to pyatv==x.y.z once one is available.
+pyatv @ git+https://github.com/postlund/pyatv.git@00b3820b32890e7a54c7bfb336dc617a2797f99b
+aiohttp==3.13.5
 async-timeout==5.0.1;python_version<'3.11'
 cryptography==46.0.3
 chacha20poly1305-reuseable==0.13.2

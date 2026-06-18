@@ -6,6 +6,17 @@ Full release history is also available on [GitHub Releases](https://github.com/G
 
 ---
 
+## 1.8.1 — 2026-06-19
+
+- Fix power state and push updates broken on tvOS 26 by pinning pyatv to master HEAD (commit `00b3820b`)
+  - **PR [#2855](https://github.com/postlund/pyatv/pull/2855):** Send `TVRCSessionStart` during Companion protocol connect — tvOS 26 requires this session registration before it will honour power state queries or deliver `SystemStatus` push events. Graceful fallback included for tvOS 17 and earlier
+  - **PR [#2855](https://github.com/postlund/pyatv/pull/2855):** Never send a null `_i` field in `_systemInfo` — tvOS 26 silently ignores push subscriptions when this field is absent; the fix substitutes a stable device identifier
+  - Note: PR [#2847](https://github.com/postlund/pyatv/pull/2847) (an earlier tvOS 26.5 fix) was reverted upstream because it broke tvOS 17.6; the pinned commit is after that revert
+- Update aiohttp to 3.13.5 (patch)
+- No new upstream pyatv release exists yet; `requirements.txt` will be restored to a version pin once one is published
+
+---
+
 ## 1.8.0 — 2026-02-14
 
 - Update pyatv to 0.17 — includes updates to the device volume endpoint control API
