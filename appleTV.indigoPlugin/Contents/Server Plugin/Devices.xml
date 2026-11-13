@@ -41,6 +41,18 @@
 	<Label>Use this to update device if OS updates changes MAC Address.
 	</Label>
 	</Field>
+			<Field id="simpleSeparatorReset" type="separator"/>
+   		 <Field id="resetDevicePairing"
+				   type="button"
+				   tooltip="Clear saved pairing credentials and identifier for this device" fontColor="red">
+			<Title>Reset</Title>
+        	<Label>Reset Device: </Label>
+				<CallbackMethod>resetDevicePairing</CallbackMethod>
+		</Field>
+			<Field id="resetLabel" type="label" fontSize="small" alignText="right">
+	<Label>Use if the appleTV has been replaced (e.g. new unit on the same IP). Stops the current connection and clears saved pairing credentials, identifier and MAC (IP is kept). Then press Start Connection, enter the PinCode if requested, and Save.
+	</Label>
+	</Field>
 				<Field id="simpleSeparator133" type="separator"/>
 			<Field id="verficationcode"
 				   type="textfield"

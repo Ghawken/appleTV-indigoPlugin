@@ -1610,6 +1610,86 @@ class Plugin(indigo.PluginBase):
             return
         self.logger.info("Scanning for Devices")
 
+    def resetDevicePairing(self, valuesDict, type_id="", dev_id=None):
+        """
+        Reset Device button (Device Config UI).
+        Use when the physical appleTV has been replaced (e.g. new unit given the same IP address).
+        - Stops the running connection manager for this device (stops retrying the old identifier)
+        - Clears saved pairing credentials, identifier and MAC from the Indigo device
+        - Removes the old device's pairing entry from pyatv_storage.conf
+        IP address is kept, so 'Start Connection' will then find and pair whatever appleTV is at that IP.
+        """
+        try:
+            self.logger.debug(f"Reset Device button pressed for dev_id {dev_id}")
+            if dev_id is None:
+                self.logger.info("Please save the device first before resetting.")
+                return valuesDict
+            device = indigo.devices[dev_id]
+            old_identifier = str(device.states.get("identifier", "") or "")
+            self.logger.info(f"Resetting pairing for {device.name}.  Old identifier: '{old_identifier}', keeping IP: {device.states.get('ip', '')}")
+
+            # Stop any running connection for this device
+            for i in range(len(self.appleTVManagers) - 1, -1, -1):
+                if int(self.appleTVManagers[i].device_ID) == int(dev_id):
+                    try:
+                        self.appleTVManagers[i].disconnect()
+                    except Exception:
+                        self.logger.debug("Exception disconnecting manager during reset", exc_info=True)
+                    del self.appleTVManagers[i]
+                    self.logger.debug(f"Stopped AppleTV Manager for device: {device.name}")
+
+            # Clear any pending/previous pairing results so they are not re-applied on Save
+            self._appleTVpairing = None
+            self._paired_credentials = None
+
+            # Remove old pairing data from pyatv storage
+            if old_identifier != "":
+                fut = asyncio.run_coroutine_threadsafe(self._remove_stored_pairing(old_identifier), self._event_loop)
+                try:
+                    fut.result(timeout=10)
+                except Exception:
+                    self.logger.debug("Could not remove pyatv stored pairing data", exc_info=True)
+
+            # Clear device states
+            device.updateStatesOnServer([
+                {'key': 'identifier', 'value': ""},
+                {'key': 'MAC', 'value': ""},
+                {'key': 'status', 'value': "Awaiting Setup"},
+            ])
+            device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
+
+            # Clear props in the open dialog (these are saved when Save pressed)
+            valuesDict["credentials"] = ""
+            valuesDict["isPaired"] = False
+            valuesDict["MAC"] = ""
+            valuesDict["Identifier"] = ""
+            valuesDict["Model"] = ""
+
+            self.logger.info(f"{device.name} reset.  Now press 'Start Connection' to find and pair the new appleTV at this IP, enter PinCode if requested, then Save.")
+            return valuesDict
+        except Exception:
+            self.logger.exception("Exception in Reset Device")
+            return valuesDict
+
+    async def _remove_stored_pairing(self, identifier):
+        try:
+            path_to_file_storage = os.path.join(self.pluginprefDirectory, "pyatv_storage.conf")
+            storage = FileStorage(path_to_file_storage, self._event_loop)
+            await storage.load()
+            removed = 0
+            for settings in list(storage.settings):
+                protocols = settings.protocols
+                ids = [protocols.airplay.identifier, protocols.companion.identifier, protocols.dmap.identifier,
+                       protocols.mrp.identifier, protocols.raop.identifier]
+                if identifier in ids:
+                    if await storage.remove_settings(settings):
+                        removed += 1
+            if removed:
+                await storage.save()
+            self.logger.debug(f"Removed {removed} stored pairing entr(y/ies) for identifier {identifier}")
+        except Exception:
+            self.logger.debug("Exception removing stored pairing", exc_info=True)
+
     async def two_pairing(self, identifier, pincode):
         try:
             self.logger.debug(f"Second Step One Pairing Started {identifier} & pincode {pincode}")
@@ -2823,14 +2903,15 @@ class Plugin(indigo.PluginBase):
                     #self.logger.debug(f"LocalPropsCopy After: {localPropsCopy}")
                     self._event_loop.create_task(self.one_pairing(atv, devicename))
                     return
-                elif str(atv.address) == str(ipaddress) and force_to_ip_address:
+                elif str(atv.address) == str(ipaddress) and (force_to_ip_address or identifier in ("", None)):
                     self.logger.debug(f"Found Matching Device with IP address {atv.address}, start Pairing.")
-                    self.logger.info(f"Found existing device with a different MAC Address, updating this MAC Address to current IP Address and Pairing.")
+                    self.logger.info(f"Found device {atv.name} at {atv.address} with identifier {atv.identifier}.  Updating this Indigo device and Pairing.")
                     dev.updateStateOnServer(key="MAC", value=str(atv.identifier))
                     dev.updateStateOnServer(key="identifier", value=str(atv.identifier))
 
                     self._event_loop.create_task(self.one_pairing(atv, devicename))
                     return
+            self.logger.info(f"No appleTV matching identifier '{identifier}' found (IP {ipaddress}).  If the appleTV has been replaced, use 'Reset Device' then 'Start Connection', or use 'Force Connection to this IP'.")
 
     ########################################
     # Relay / Dimmer Action callback
