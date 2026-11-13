@@ -194,6 +194,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
         self.all_features = None
         self.cast = "unicast"
         self._killConnection = False
+        self._stopped = False   ## set on disconnect - loop_atv must exit, never reconnect
         self.airplay_port = 0
         self.RAOP_port = 0
         self.MRP_port = 0
@@ -438,6 +439,8 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
     def _handle_disconnect(self):
         """Handle that the device disconnected and restart connect loop."""
         try:
+            if self._stopped:
+                return
             if self.atv:
                 self.atv.close()
                 self.atv = None
@@ -447,7 +450,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
 
             self._task = self.loop.create_task(self.loop_atv(self.loop, atv_config=self.atv_config, deviceid=self.deviceid))
         except:
-            self.plugin.logger.debugf("_handle disconnect and restart", exc_info=True)
+            self.plugin.logger.debug("_handle disconnect and restart", exc_info=True)
 
 
 
@@ -464,6 +467,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
 
     async def _async_cleanup(self):
         self.is_on = False
+        self._stopped = True
         self._killConnection = True
 
         if self.atv:
@@ -1222,7 +1226,9 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
 
             await self.storage.save()
             return (pyatv_connect, config.address)
-        except:
+        except asyncio.CancelledError:
+            raise
+        except Exception:
             self.plugin.logger.debug("Connect ATV Exception: ", exc_info=True)
             return (False, "")
 
@@ -1242,11 +1248,14 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
             self.plugin.logger.debug(f"Using {path_to_file_storage} for storing pairing data.")
             self.storage = FileStorage(path_to_file_storage, loop)
             await self.storage.load()
-        except:
+        except asyncio.CancelledError:
+            self.plugin.logger.debug("loop_atv cancelled during FileStorage load (device stopping/restarting).")
+            raise
+        except Exception:
             self.plugin.logger.exception("FileStorage Exception:")
 
         retries = 0
-        while True:
+        while not self._stopped:
             if timeretry > 600:
                 timeretry = 60
             device = indigo.devices[deviceid]
@@ -1258,6 +1267,12 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                     (self.atv, newipaddress) = await self.connect_atv(loop, identifier, airplay_credentials,  ipaddress, self.cast)
                 else:  ## if anything other than unicast or invalid IP use multicast
                     (self.atv, newipaddress) = await self.connect_atv(loop, identifier, airplay_credentials,  "", self.cast)
+                if self._stopped:
+                    if self.atv:
+                        self.atv.close()
+                        self.atv = None
+                    self.plugin.logger.debug(f"{self.devicename}: listener stopped, not continuing connection.")
+                    return
                 if self.atv:
                     self.atv.listener = self
                     self.atv.push_updater.listener = self
@@ -1311,7 +1326,7 @@ class appleTVListener( DeviceListener, PushListener, PowerListener, AudioListene
                         except pyatv.exceptions.NotSupportedError:
                             pass
                     last_tick = time.time()
-                    while True:
+                    while not self._stopped:
                         await asyncio.sleep(2)
                         # call _tick_position() about every 10 s
                         if time.time() - last_tick >= 10:
@@ -1563,7 +1578,15 @@ class Plugin(indigo.PluginBase):
                         thisisappleTV = True
                     new_data["credentials"] = credentials
                     new_data["identifier"] = identifier
-                    #object = appleTVListener(self, self._event_loop, new_data, device.id, thisisappleTV, False, device.name )
+                    # Never run two connection managers for the same device (they fight & cycle the connection)
+                    for i in range(len(self.appleTVManagers) - 1, -1, -1):
+                        if int(self.appleTVManagers[i].device_ID) == int(device.id):
+                            self.logger.debug(f"{device.name}: stopping existing manager before starting new one.")
+                            try:
+                                self.appleTVManagers[i].disconnect()
+                            except Exception:
+                                self.logger.debug("Exception stopping existing manager", exc_info=True)
+                            del self.appleTVManagers[i]
                     self.appleTVManagers.append(  appleTVListener(self, self._event_loop, new_data, device.id, thisisappleTV, False, device.name ) )
                 else:
                     self.logger.info(f"{device.name} has not been setup in Device Edit.  Suggest setup connection or delete device.")
