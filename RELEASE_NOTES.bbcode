@@ -1,0 +1,81 @@
+[b][size=150]appleTV Plugin 1.8.8[/size][/b]
+[i]Apple TV 4K (4th gen) & tvOS 27 support, a more reliable connection layer, and easy Apple TV replacement[/i]
+
+[b]────────────────────────────────────────[/b]
+
+[b][size=125]Why a custom pyatv build?[/size][/b]
+
+The plugin is built on [url=https://pyatv.dev]pyatv[/url]. Upstream pyatv hasn't had a commit or release since [b]19 June 2026 (v0.18.0)[/b]. Since then, the community has submitted dozens of fixes that are still waiting to be merged, including support for new hardware and tvOS 27.
+
+From 1.8.7 the plugin installs pyatv from [url=https://github.com/Ghawken/pyatv/tree/indigo]Ghawken/pyatv (indigo branch)[/url]. That branch is upstream 0.18.0 plus a selected set of those pending fixes, all passing pyatv's full test suite (1325 passed). Current version: [b]0.18.0.post2[/b]. If upstream starts releasing again, the plugin will move back to the official package.
+
+Indigo installs the new library automatically when you update the plugin.
+
+[b]────────────────────────────────────────[/b]
+
+[b][size=125]Library improvements (pyatv)[/size][/b]
+
+[b]New hardware & tvOS 27[/b]
+[list]
+[*][b]Apple TV 4K (4th generation) recognised[/b]: the new AppleTV18,1 shows as "Apple TV 4K (gen 4)" running tvOS, not "Unknown". [url=https://github.com/postlund/pyatv/pull/2949]#2949[/url]
+[*][b]AirPlay PIN pairing fixed on tvOS 27[/b]: tvOS 27 could stop the pairing PIN from appearing on screen. pyatv now sends the client name tvOS 27 expects. [url=https://github.com/postlund/pyatv/pull/2894]#2894[/url]
+[*][b]Pairing errors reported instead of hanging[/b]: a rejected pairing now fails immediately, instead of hanging ~10 seconds and then failing with a confusing error. [url=https://github.com/postlund/pyatv/pull/2920]#2920[/url]
+[*][b]Clearer authentication errors[/b] for AirPlay remote control. [url=https://github.com/postlund/pyatv/pull/2924]#2924[/url]
+[/list]
+
+[b]Connection reliability[/b]
+[list]
+[*][b]No leaked connections on failed connects[/b]: a failed connection attempt used to leave network connections open. With the plugin's automatic retries, a sleeping or offline device could pile these up. [url=https://github.com/postlund/pyatv/pull/2945]#2945[/url]
+[*][b]Companion protocol error replies[/b] are now treated as errors, not as successful responses. [url=https://github.com/postlund/pyatv/pull/2939]#2939[/url]
+[/list]
+
+[b]Discovery (finding your devices)[/b]
+[list]
+[*][b]By-IP scans wait for all services[/b]: these scans used to stop early and could miss services that are slow to appear, e.g. Companion just after the Apple TV wakes (this affects power state and app launching). [url=https://github.com/postlund/pyatv/pull/2911]#2911[/url]
+[*][b]Fallback scan asks for every service type[/b]. [url=https://github.com/postlund/pyatv/pull/2930]#2930[/url]
+[*][b]Unusual device names no longer abort a scan[/b]. [url=https://github.com/postlund/pyatv/pull/2936]#2936[/url]
+[*][b]Malformed network packets ignored[/b]. [url=https://github.com/postlund/pyatv/pull/2926]#2926[/url]
+[*][b]Multi-VLAN / mDNS-reflector networks[/b] (UniFi, Firewalla, Avahi): devices are no longer mixed up (wrong models shown, or every device appearing to be in deep sleep). [url=https://github.com/postlund/pyatv/pull/2931]#2931[/url]
+[/list]
+
+[b]Playback & device state[/b]
+[list]
+[*][b]Playback position NaN fixed[/b]: fixes broken position and remaining-time calculations for some apps. [url=https://github.com/postlund/pyatv/pull/2897]#2897[/url]
+[*][b]No bogus volume updates[/b] when the device doesn't report a volume. [url=https://github.com/postlund/pyatv/pull/2935]#2935[/url]
+[*][b]HomePod stereo pairs show as On[/b] while playing. [url=https://github.com/postlund/pyatv/pull/2917]#2917[/url]
+[*][b]Audio streaming deadlock fixed[/b]: streaming some URLs to AirPlay devices could stall with "failed to init decoder". [url=https://github.com/postlund/pyatv/pull/2850]#2850[/url]
+[*][b]AirPlay feature detection fixed[/b] for some third-party receivers (e.g. LG TVs). [url=https://github.com/postlund/pyatv/pull/2942]#2942[/url]
+[/list]
+
+[b]────────────────────────────────────────[/b]
+
+[b][size=125]Plugin improvements[/size][/b]
+
+[b]1.8.8[/b]
+[list]
+[*]Uses pyatv 0.18.0.post2, which adds Apple TV 4K (4th gen) support.
+[/list]
+
+[b]1.8.7[/b]
+[list]
+[*][b]Fixed connections constantly dropping and reconnecting after re-pairing[/b]: an orphaned background connection could fight the new one. Old connections now always shut down properly, and a device can only ever have one connection.
+[*]Switched to the custom pyatv build above.
+[/list]
+
+[b]1.8.6[/b]
+[list]
+[*][b]New "Reset Device" button[/b] in the device config dialog, for replacing an Apple TV (e.g. a new unit on the same IP). It stops the current connection and clears the saved pairing credentials, identifier and MAC address (it keeps the IP address).
+[*][b]Start Connection[/b] now pairs with whatever Apple TV is at the device's IP after a reset.
+[*]A log message now explains when no matching Apple TV is found. Previously it failed silently.
+[/list]
+
+[b]────────────────────────────────────────[/b]
+
+[b][size=125]Replacing an Apple TV[/size][/b]
+
+[list=1]
+[*]Open the Indigo device → [b]Edit Device Settings[/b]
+[*]Press [b]Reset Device[/b]
+[*]Press [b]Start Connection[/b], enter the PIN shown on the TV, and press [b]Submit PinCode[/b]
+[*]Press [b]Save[/b]
+[/list]
