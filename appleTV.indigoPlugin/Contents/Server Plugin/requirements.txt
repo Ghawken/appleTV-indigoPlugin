@@ -1,7 +1,7 @@
 homekitlink_ffmpeg
 # pyatv from Ghawken/pyatv 'indigo' branch = upstream 0.18.0 + open upstream PRs (tvOS 27 pairing etc.)
 # See INDIGO_FORK.md in that branch for the PR list.
-pyatv @ git+https://github.com/Ghawken/pyatv.git@fcffc4920957755fe7815cfd4e86f4b0fb72b184
+pyatv @ git+https://github.com/Ghawken/pyatv.git@f3e10a156e77b499f15935437d3eb855983dffce
 aiohttp==3.13.5
 async-timeout==5.0.1;python_version<'3.11'
 cryptography<49; sys_platform == "darwin" and platform_machine == "x86_64"
